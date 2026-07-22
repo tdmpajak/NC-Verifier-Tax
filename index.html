@@ -166,6 +166,31 @@ input:checked + .slider::before{transform:translateX(16px);}
 .suggest-box.warn .txt{color:#6b4d0f;}
 .suggest-box .btnrow{display:flex;gap:6px;flex-wrap:wrap;}
 
+/* ── Multi-item pemotongan pajak ── */
+.mode-toggle{display:flex;gap:6px;margin-bottom:10px;}
+.mode-toggle button{flex:1;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:700;padding:8px 6px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer;transition:.15s;}
+.mode-toggle button:hover{border-color:#B7AE97;}
+.mode-toggle button.active{background:var(--brick);border-color:var(--brick);color:#fff;}
+.items-hint{font-size:10.5px;color:var(--ink-soft);line-height:1.5;margin-bottom:8px;}
+.item-row{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px;}
+.item-row-top{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.item-row-top .item-no{font-size:10.5px;font-weight:700;color:var(--ink-soft);flex-shrink:0;}
+.item-row-top .item-amt-wrap{position:relative;flex:1;}
+.item-row-top .item-amt-wrap .pfx{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;pointer-events:none;}
+.item-row-top .item-amt-wrap input{width:100%;padding:6px 8px 6px 26px;border:1px solid var(--line);border-radius:6px;font-size:12px;font-family:'IBM Plex Mono',monospace;}
+.item-row-top .item-remove{flex-shrink:0;width:24px;height:24px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--brick);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}
+.item-row-top .item-remove:hover{background:var(--brick-light);border-color:var(--brick);}
+.item-tax-chips{display:flex;flex-wrap:wrap;gap:5px;}
+.tax-chip{font-family:'IBM Plex Sans',sans-serif;font-size:10px;font-weight:600;padding:4px 8px;border-radius:20px;border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);cursor:pointer;transition:.12s;white-space:nowrap;}
+.tax-chip:hover{border-color:#B7AE97;}
+.tax-chip.selected{background:var(--brick);border-color:var(--brick);color:#fff;}
+.tax-chip.none-chip.selected{background:#6B7280;border-color:#6B7280;}
+.add-item-btn{width:100%;padding:8px;border:1.5px dashed #B7AE97;border-radius:7px;background:transparent;color:var(--ink-soft);font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:10px;}
+.add-item-btn:hover{border-color:var(--brick);color:var(--brick);background:var(--brick-light);}
+.items-empty{font-size:11px;color:var(--ink-soft);text-align:center;padding:14px 8px;background:#fff;border:1px dashed var(--line);border-radius:7px;margin-bottom:8px;}
+.calc-row.item-line{font-size:10.5px;}
+.calc-row.item-line .l{color:var(--ink-soft);}
+
 ::-webkit-scrollbar{width:9px;height:9px;}
 ::-webkit-scrollbar-thumb{background:#C9C0A9;border-radius:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
@@ -288,6 +313,20 @@ const POT_TYPES = {
   'reward-op':    { tarif:0.025, coa:'214103', short:'PPH 21',   desc:'Reward Orang Pribadi',       recipient:'op' },
   'reward-badan': { tarif:0.15,  coa:'214105', short:'PPH 23',   desc:'Reward Badan Usaha',         recipient:'badan' },
 };
+
+// Pilihan cepat (chip) untuk tiap baris item pada mode Multi-Item — memakai
+// tarif & kode COA yang sama persis dengan POT_TYPES supaya konsisten dengan
+// mode Transaksi Tunggal, ditambah satu opsi semu 'none' (tidak kena PPh).
+const TAX_ITEM_CHOICES = [
+  { key:'none', label:'Tidak Kena Pajak' },
+  { key:'jasa-op', label:'PPh 21 Jasa OP · 2,5%' },
+  { key:'jasa-badan', label:'PPh 23 Jasa Badan · 2%' },
+  { key:'sewa-tanah', label:'PPh 4(2) Sewa T/B · 10% Final' },
+  { key:'sewa-lain', label:'PPh 23 Sewa Lain · 2%' },
+  { key:'reward-op', label:'PPh 21 Reward OP · 2,5%' },
+  { key:'reward-badan', label:'PPh 23 Reward Badan · 15%' },
+];
+let taxItemSeq = 1; // penomor id unik utk baris item multi-item, lintas semua halaman
 
 function formatRate(tarif){
   const pct = tarif*100;
@@ -554,7 +593,7 @@ async function handleFile(file){
       stampPosManual:false,
       stampScale:1,
       zoom:1,
-      stampTax:{enabled:false, type:'sewa-lain', pkp:'non', autoType:true},
+      stampTax:{enabled:false, type:'sewa-lain', pkp:'non', autoType:true, mode:'single', items:[]},
       stampSign:{enabled:false, pos:'left', imgScale:1},
       stampNote:{enabled:false, text:''},
     });
@@ -991,7 +1030,7 @@ function renderPageList(){
       : p.isNC ? `<span class="badge badge-nc">📎 Terdeteksi NC</span>`
       : `<span class="badge badge-plain">Lampiran</span>`;
     const dots = `
-      <div class="stamp-dots" title="Stempel pajak · tanda tangan · keterangan">
+      <div class="stamp-dots" title="Stempel pajak · tanda tangan · note">
         <div class="dot ${p.stampTax.enabled?'on red':''}"></div>
         <div class="dot ${p.stampSign.enabled?'on green':''}"></div>
         <div class="dot ${(p.stampNote.enabled && p.stampNote.text.trim())?'on gold':''}"></div>
@@ -1090,19 +1129,33 @@ function renderOverlays(p){
 
   let taxHtml = '';
   if(p.stampTax.enabled){
-    const conf = POT_TYPES[p.stampTax.type];
-    const nominal = parseIdNumber(p.ncFields.jumlah);
-    const isPKP = p.stampTax.pkp==='pkp';
-    const dpp = isPKP ? nominal/1.11 : nominal;
-    const pph = dpp*conf.tarif;
-    const totalBayar = nominal-pph;
-    taxHtml = `
-      <div class="tax-box">
-        <div class="cap">Stamp Potongan Pajak</div>
-        <div class="row"><span>NC</span><span>${rp(nominal)}</span></div>
-        <div class="row"><span>${taxLineLabel(p.stampTax.type)}</span><span>${rp(pph)}</span></div>
-        <div class="row total"><span>TOT BAYAR</span><span>${rp(totalBayar)}</span></div>
-      </div>`;
+    if((p.stampTax.mode||'single')==='multi'){
+      const t = computeMultiTotals(p);
+      const rows = t.breakdown.length
+        ? t.breakdown.map(b=>`<div class="row"><span>${b.shortLabel}</span><span>${rp(b.pph)}</span></div>`).join('')
+        : '';
+      taxHtml = `
+        <div class="tax-box">
+          <div class="cap">Stamp Potongan Pajak</div>
+          <div class="row"><span>NC</span><span>${rp(t.totalTagihan)}</span></div>
+          ${rows}
+          <div class="row total"><span>TOT BAYAR</span><span>${rp(t.totalBayar)}</span></div>
+        </div>`;
+    } else {
+      const conf = POT_TYPES[p.stampTax.type];
+      const nominal = parseIdNumber(p.ncFields.jumlah);
+      const isPKP = p.stampTax.pkp==='pkp';
+      const dpp = isPKP ? nominal/1.11 : nominal;
+      const pph = dpp*conf.tarif;
+      const totalBayar = nominal-pph;
+      taxHtml = `
+        <div class="tax-box">
+          <div class="cap">Stamp Potongan Pajak</div>
+          <div class="row"><span>NC</span><span>${rp(nominal)}</span></div>
+          <div class="row"><span>${taxLineLabel(p.stampTax.type)}</span><span>${rp(pph)}</span></div>
+          <div class="row total"><span>TOT BAYAR</span><span>${rp(totalBayar)}</span></div>
+        </div>`;
+    }
   }
 
   // BUG FIX: tanggal verifikasi sebelumnya ditaruh di dalam kotak "tax-box",
@@ -1122,7 +1175,7 @@ function renderOverlays(p){
 
   let html = `<span class="drag-tag">⤢</span>` + bodyHtml;
   if(showNote){
-    html += `<div class="note-block"><span class="cap2">Perlu Koreksi</span>${escapeHtml(p.stampNote.text)}</div>`;
+    html += `<div class="note-block"><span class="cap2">Note</span>${escapeHtml(p.stampNote.text)}</div>`;
   }
   html += `<div class="resize-handle" title="Tarik untuk perbesar/perkecil"></div>`;
   el.innerHTML = html;
@@ -1195,10 +1248,10 @@ function renderRightPanel(){
       <div class="panel-block">
         <h4>Halaman ${p.num}</h4>
         <div class="desc">Halaman ini tidak terdeteksi sebagai Permintaan Pembayaran (NC) — akan tetap disertakan apa adanya sebagai lampiran di PDF final.</div>
-        <div class="toggle-row" style="cursor:pointer;" onclick="toggleManualNC(${p.num})">
+        <label class="toggle-row" style="cursor:pointer;">
           <span>Tandai manual sebagai halaman NC</span>
-          <label class="switch"><input type="checkbox" ${p.isNC?'checked':''} onclick="event.stopPropagation();toggleManualNC(${p.num})"><span class="slider"></span></label>
-        </div>
+          <span class="switch"><input type="checkbox" ${p.isNC?'checked':''} onchange="toggleManualNC(${p.num},this.checked)"><span class="slider"></span></span>
+        </label>
       </div>`;
     return;
   }
@@ -1244,13 +1297,9 @@ function renderRightPanel(){
       <h4>Stempel Potongan Pajak <label class="switch"><input type="checkbox" ${p.stampTax.enabled?'checked':''} onchange="toggleStamp(${p.num},'stampTax',this.checked)"><span class="slider"></span></label></h4>
       <div class="desc">Tarif &amp; kode COA bersumber dari pengaturan G-Tax (Pemotongan Pajak).</div>
 
-      <div class="suggest-box ${suggestion.noTaxNeeded?'warn':''}">
-        <div class="cap">${suggestion.noTaxNeeded ? '⚠ Saran: Tidak Perlu Dipotong' : '💡 Saran Analisis Otomatis'}</div>
-        <div class="txt">${escapeHtml(suggestion.reason)}</div>
-        <div class="btnrow">
-          ${suggestion.suggestedKey ? `<button class="btn btn-sm" onclick="applySuggestion(${p.num},'${suggestion.suggestedKey}')">Pakai saran: ${suggestLabel}</button>` : ''}
-          ${suggestion.noTaxNeeded ? `<button class="btn btn-sm" onclick="toggleStamp(${p.num},'stampTax',false)">Nonaktifkan potongan pajak</button>` : ''}
-        </div>
+      <div class="mode-toggle">
+        <button type="button" class="${(p.stampTax.mode||'single')==='single'?'active':''}" onclick="switchTaxMode(${p.num},'single')">🧾 Transaksi Tunggal</button>
+        <button type="button" class="${p.stampTax.mode==='multi'?'active':''}" onclick="switchTaxMode(${p.num},'multi')">🧮 Multi-Item</button>
       </div>
 
       <div class="field"><label>Status PKP Vendor</label>
@@ -1265,6 +1314,16 @@ function renderRightPanel(){
           ? `NC menunjukkan nominal PPN ${rp(p.pkpAuto.ppnAmount)} → vendor otomatis diset <strong>PKP</strong>. Cek kembali bila hasil baca OCR meleset.`
           : `Tidak ada / nominal PPN 0 pada NC ini → vendor otomatis diset <strong>Non-PKP</strong>. Cek kembali bila hasil baca OCR meleset.`}</div>
       </div>` : ''}
+
+      ${(p.stampTax.mode||'single')==='single' ? `
+      <div class="suggest-box ${suggestion.noTaxNeeded?'warn':''}" style="margin-top:10px;">
+        <div class="cap">${suggestion.noTaxNeeded ? '⚠ Saran: Tidak Perlu Dipotong' : '💡 Saran Analisis Otomatis'}</div>
+        <div class="txt">${escapeHtml(suggestion.reason)}</div>
+        <div class="btnrow">
+          ${suggestion.suggestedKey ? `<button class="btn btn-sm" onclick="applySuggestion(${p.num},'${suggestion.suggestedKey}')">Pakai saran: ${suggestLabel}</button>` : ''}
+          ${suggestion.noTaxNeeded ? `<button class="btn btn-sm" onclick="toggleStamp(${p.num},'stampTax',false)">Nonaktifkan potongan pajak</button>` : ''}
+        </div>
+      </div>
       <div class="field"><label>Jenis Transaksi / Tarif</label>
         <select onchange="updateTaxSetting(${p.num},'type',this.value)">
           ${Object.keys(POT_TYPES).map(k=>`<option value="${k}" ${p.stampTax.type===k?'selected':''}>${POT_TYPES[k].short} (${POT_TYPES[k].coa}) ${formatRate(POT_TYPES[k].tarif)} — ${POT_TYPES[k].desc}</option>`).join('')}
@@ -1276,6 +1335,12 @@ function renderRightPanel(){
         <div class="calc-row"><span class="l">Potongan (${taxLineLabel(p.stampTax.type)})</span><span>− ${rp(pph)}</span></div>
         <div class="calc-row total"><span>Total Bayar</span><span>${rp(totalBayar)}</span></div>
       </div>
+      ` : `
+      <div class="items-hint">1 NC, beberapa baris transaksi — pilih tarif hanya pada item yang kena pajak. PPN 11% (kalau PKP) dihitung sekali dari total seluruh item.</div>
+      <div id="taxItemsList"></div>
+      <button type="button" class="add-item-btn" onclick="addTaxItem(${p.num})">+ Tambah Item</button>
+      <div class="calc-box" id="multiCalcBox"></div>
+      `}
     </div>
 
     <div class="panel-block">
@@ -1299,12 +1364,13 @@ function renderRightPanel(){
     </div>
 
     <div class="panel-block">
-      <h4>Stempel Keterangan Kesalahan <label class="switch"><input type="checkbox" ${p.stampNote.enabled?'checked':''} onchange="toggleStamp(${p.num},'stampNote',this.checked)"><span class="slider"></span></label></h4>
-      <div class="desc">Tulis manual keterangan kesalahannya. Stempel tanda tangan tetap tampil berdampingan dengan catatan ini.</div>
+      <h4>Stempel Note <label class="switch"><input type="checkbox" ${p.stampNote.enabled?'checked':''} onchange="toggleStamp(${p.num},'stampNote',this.checked)"><span class="slider"></span></label></h4>
+      <div class="desc">Tulis catatan bebas untuk halaman ini. Stempel tanda tangan tetap tampil berdampingan dengan catatan ini.</div>
       <div class="field"><textarea placeholder="Contoh: Nominal tidak sesuai perjanjian sewa, mohon dikoreksi." oninput="updateNoteText(${p.num},this.value)">${escapeHtml(p.stampNote.text)}</textarea></div>
 
     </div>
   `;
+  if((p.stampTax.mode||'single')==='multi') renderTaxItemsList(p);
 }
 
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -1321,9 +1387,10 @@ function updateField(num, key, val){
   // diperbarui — jadi angkanya jadi tidak sinkron dengan stempel. Di sini
   // kita update HANYA isi .calc-box (bukan renderRightPanel() penuh), supaya
   // angka tetap sinkron tanpa membuat kursor/fokus input meloncat saat mengetik.
-  if(key==='jumlah') updateCalcBox(p);
+  if(key==='jumlah' && (p.stampTax.mode||'single')==='single') updateCalcBox(p);
 }
 function updateCalcBox(p){
+  if((p.stampTax.mode||'single')!=='single') return;
   const box = document.querySelector('.calc-box');
   if(!box || !p.isNC) return;
   const conf = POT_TYPES[p.stampTax.type];
@@ -1376,6 +1443,108 @@ function updateTaxSetting(num,key,val){
   if(key==='type') p.stampTax.autoType = false; // user memilih manual, jangan ditimpa saran otomatis lagi
   renderOverlays(p); renderRightPanel();
 }
+/* ══════════ MULTI-ITEM: satu NC, beberapa baris transaksi campuran ══════════
+   Dipakai saat satu Permintaan Pembayaran (NC) berisi lebih dari satu
+   transaksi dengan jenis pajak berbeda-beda. Logika penjumlahannya mengikuti
+   G-Tax (index GASPOL) mode Multi-Item: tiap item punya nominal (DPP)+jenis
+   pajaknya sendiri, PPN 11% (kalau vendor PKP) dihitung SEKALI dari total
+   seluruh DPP, sedangkan PPh dihitung per-item lalu dijumlahkan. */
+function computeMultiTotals(p){
+  const items = (p.stampTax.items||[]);
+  const isPKP = p.stampTax.pkp==='pkp';
+  let totalDPP=0, totalPPh=0;
+  const breakdown=[];
+  items.forEach((it,idx)=>{
+    totalDPP += it.jumlah||0;
+    const key = it.typeKey||'none';
+    if(key!=='none' && it.jumlah>0){
+      const conf = POT_TYPES[key];
+      const pphItem = it.jumlah*conf.tarif;
+      totalPPh += pphItem;
+      breakdown.push({ idx, typeKey:key, jumlah:it.jumlah, pph:pphItem,
+        shortLabel:`${conf.short} ${formatRate(conf.tarif)}`, fullLabel:taxLineLabel(key) });
+    }
+  });
+  const ppn = isPKP ? totalDPP*0.11 : 0;
+  const totalTagihan = totalDPP+ppn;
+  const totalBayar = totalTagihan-totalPPh;
+  return { totalDPP, ppn, totalTagihan, totalPPh, totalBayar, breakdown, isPKP, itemCount:items.length };
+}
+
+function switchTaxMode(num, mode){
+  const p = App.pages.find(pg=>pg.num===num);
+  p.stampTax.mode = mode;
+  if(mode==='multi' && p.stampTax.items.length===0){
+    p.stampTax.items.push({id:taxItemSeq++, jumlah:0, typeKey:'none'});
+    p.stampTax.items.push({id:taxItemSeq++, jumlah:0, typeKey:'none'});
+  }
+  renderRightPanel(); renderOverlays(p); renderPageList();
+}
+function addTaxItem(num){
+  const p = App.pages.find(pg=>pg.num===num);
+  p.stampTax.items.push({id:taxItemSeq++, jumlah:0, typeKey:'none'});
+  renderTaxItemsList(p); renderOverlays(p); renderPageList();
+}
+function removeTaxItem(num, id){
+  const p = App.pages.find(pg=>pg.num===num);
+  p.stampTax.items = p.stampTax.items.filter(it=>it.id!==id);
+  renderTaxItemsList(p); renderOverlays(p); renderPageList();
+}
+function formatTaxItemInput(el, num, id){
+  const raw = el.value.replace(/[^0-9]/g,'');
+  el.value = raw ? parseInt(raw,10).toLocaleString('id-ID') : '';
+  const p = App.pages.find(pg=>pg.num===num);
+  const it = p.stampTax.items.find(x=>x.id===id);
+  if(it) it.jumlah = parseInt(raw,10)||0;
+  updateMultiCalcBox(p); renderOverlays(p); renderPageList();
+}
+function updateTaxItemType(num, id, typeKey){
+  const p = App.pages.find(pg=>pg.num===num);
+  const it = p.stampTax.items.find(x=>x.id===id);
+  if(it) it.typeKey = typeKey;
+  renderTaxItemsList(p); renderOverlays(p); renderPageList();
+}
+
+// Render ULANG hanya daftar item + kotak ringkasan (bukan renderRightPanel()
+// penuh) — supaya fokus/kursor input nominal yang sedang diketik tidak
+// meloncat, dan klik chip jenis pajak tetap responsif tanpa redraw panel penuh.
+function renderTaxItemsList(p){
+  const wrap = $('#taxItemsList');
+  if(!wrap) return;
+  const items = p.stampTax.items||[];
+  wrap.innerHTML = items.length ? items.map((it,idx)=>`
+    <div class="item-row">
+      <div class="item-row-top">
+        <span class="item-no">#${idx+1}</span>
+        <div class="item-amt-wrap">
+          <span class="pfx">Rp</span>
+          <input type="text" placeholder="0" value="${it.jumlah?it.jumlah.toLocaleString('id-ID'):''}"
+            oninput="formatTaxItemInput(this,${p.num},${it.id})">
+        </div>
+        <button type="button" class="item-remove" title="Hapus item" onclick="removeTaxItem(${p.num},${it.id})">✕</button>
+      </div>
+      <div class="item-tax-chips">
+        ${TAX_ITEM_CHOICES.map(c=>`<button type="button" class="tax-chip ${c.key==='none'?'none-chip':''} ${(it.typeKey||'none')===c.key?'selected':''}" onclick="updateTaxItemType(${p.num},${it.id},'${c.key}')">${c.label}</button>`).join('')}
+      </div>
+    </div>
+  `).join('') : `<div class="items-empty">Belum ada item. Klik "+ Tambah Item" untuk mulai.</div>`;
+  updateMultiCalcBox(p);
+}
+
+function updateMultiCalcBox(p){
+  const box = $('#multiCalcBox');
+  if(!box) return;
+  const t = computeMultiTotals(p);
+  box.innerHTML = `
+    <div class="calc-row"><span class="l">Total DPP (${t.itemCount} item)</span><span>${rp(t.totalDPP)}</span></div>
+    ${t.isPKP?`<div class="calc-row ppn"><span class="l">PPN 11%</span><span>${rp(t.ppn)}</span></div>`:''}
+    ${t.breakdown.length ? t.breakdown.map(b=>`<div class="calc-row item-line"><span class="l">✂ Item #${b.idx+1} (${b.fullLabel})</span><span>− ${rp(b.pph)}</span></div>`).join('')
+      : `<div class="calc-row item-line"><span class="l">Tidak ada item yang kena PPh</span><span>—</span></div>`}
+    <div class="calc-row"><span class="l">Total PPh Dipotong</span><span>− ${rp(t.totalPPh)}</span></div>
+    <div class="calc-row total"><span>Total Bayar</span><span>${rp(t.totalBayar)}</span></div>
+  `;
+}
+
 function applySuggestion(num, key){
   const p = App.pages.find(pg=>pg.num===num);
   p.stampTax.type = key;
@@ -1389,9 +1558,9 @@ function updateNoteText(num,val){
   p.stampNote.text = val;
   renderOverlays(p); renderPageList();
 }
-function toggleManualNC(num){
+function toggleManualNC(num, val){
   const p = App.pages.find(pg=>pg.num===num);
-  p.isNC = !p.isNC;
+  p.isNC = val;
   if(p.isNC){
     let taxSuggestion = null;
     if(!p.ncFields.jumlah && p.ocrText){
@@ -1491,10 +1660,18 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   const taxBoxWPx = p.stampTax.enabled ? 225 : 0; // dilebarkan sedikit supaya label "PPH 4(2)..." tetap muat dgn font yang kini seragam lebih besar
   const sigBoxWPx = showSign ? 100 : 0; // kolom TTD dipersempit, tidak lagi selebar stempel pajak
 
+  // Untuk mode Multi-Item, jumlah baris potongan mengikuti jumlah item yang
+  // kena PPh (bisa 0 kalau semua item tidak kena) — kotak stempel jadi lebih
+  // tinggi/pendek otomatis mengikuti jumlah baris tsb. Mode Transaksi Tunggal
+  // selalu tepat 1 baris potongan, sama seperti sebelumnya.
+  const multiTotalsForHeight = (p.stampTax.enabled && (p.stampTax.mode||'single')==='multi') ? computeMultiTotals(p) : null;
+  const dedRowsCount = multiTotalsForHeight ? multiTotalsForHeight.breakdown.length : 1;
   let taxHeightPx = 0;
   // Jarak antara judul "STAMP POTONGAN PAJAK" dan baris "NC" diperlebar,
-  // supaya tidak terlihat mepet/menempel.
-  if(p.stampTax.enabled) taxHeightPx = 11 + 90 + 11;
+  // supaya tidak terlihat mepet/menempel. Setiap baris potongan tambahan
+  // (mode Multi-Item) menambah tinggi kotak sebesar 17px, sama seperti jarak
+  // antar baris yang sudah dipakai mode Transaksi Tunggal.
+  if(p.stampTax.enabled) taxHeightPx = 11 + (73 + dedRowsCount*17) + 11;
   const sigHeightPx = showSign ? 12+46*(p.stampSign.imgScale||1)+14+10+13+9 : 0;
   const bodyHeightPx = Math.max(taxHeightPx, sigHeightPx);
   const noteLineCount = showNote ? Math.min(3, wrapText(safeText(p.stampNote.text.trim()), 34).length) : 0;
@@ -1520,23 +1697,40 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   }
 
   if(p.stampTax.enabled){
-    const conf = POT_TYPES[p.stampTax.type];
-    const nominal = parseIdNumber(p.ncFields.jumlah);
-    const isPKP = p.stampTax.pkp==='pkp';
-    const dpp = isPKP ? nominal/1.11 : nominal;
-    const pph = dpp*conf.tarif;
-    const totalBayar = nominal-pph;
+    const isMulti = (p.stampTax.mode||'single')==='multi';
+    // Baris "NC" (nominal total) + daftar baris potongan — 1 baris tetap utk
+    // mode Transaksi Tunggal, N baris (bisa 0) utk mode Multi-Item mengikuti
+    // jumlah item yang benar-benar kena PPh.
+    let nominalForNC, totalBayar, deductionRows;
+    if(isMulti){
+      const t = multiTotalsForHeight || computeMultiTotals(p);
+      nominalForNC = t.totalTagihan;
+      totalBayar = t.totalBayar;
+      deductionRows = t.breakdown.map(b=>({ label:b.shortLabel, amount:b.pph }));
+    } else {
+      const conf = POT_TYPES[p.stampTax.type];
+      const nominal = parseIdNumber(p.ncFields.jumlah);
+      const isPKP = p.stampTax.pkp==='pkp';
+      const dpp = isPKP ? nominal/1.11 : nominal;
+      const pph = dpp*conf.tarif;
+      nominalForNC = nominal;
+      totalBayar = nominal-pph;
+      deductionRows = [{ label:taxLineLabel(p.stampTax.type), amount:pph }];
+    }
+
     const tw = taxBoxWPx/S;
     const size = fs(SIZE);
 
     // BUG FIX: sebelumnya "Rp" ikut bergeser di tiap baris karena posisinya
     // dihitung dari lebar TOTAL teks "Rp x.xxx.xxx" (yang panjangnya beda-beda
     // tiap baris) — jadi kata "Rp" terlihat "loncat-loncat" tidak sejajar.
-    // Sekarang "Rp" diberi SATU posisi x tetap (dipakai bersama utk ketiga
-    // baris), dihitung dari angka TERPANJANG di antara ketiganya, sementara
-    // angkanya sendiri tetap diratakan-kanan ke tepi kotak. Hasilnya "Rp"
-    // selalu sejajar vertikal, dan angka tetap rapi rata kanan.
-    const numTexts = [nominal, pph, totalBayar].map(v=>Math.round(v).toLocaleString('id-ID'));
+    // Sekarang "Rp" diberi SATU posisi x tetap (dipakai bersama utk SEMUA
+    // baris — NC, tiap baris potongan, & TOT BAYAR), dihitung dari angka
+    // TERPANJANG di antara semuanya, sementara angkanya sendiri tetap
+    // diratakan-kanan ke tepi kotak. Hasilnya "Rp" selalu sejajar vertikal,
+    // dan angka tetap rapi rata kanan — berlaku juga saat baris bertambah
+    // banyak pada mode Multi-Item.
+    const numTexts = [nominalForNC, totalBayar, ...deductionRows.map(r=>r.amount)].map(v=>Math.round(v).toLocaleString('id-ID'));
     const maxNumWidth = Math.max(...numTexts.map(t=>fontBold.widthOfTextAtSize(t, size)));
     const rpWidth = fontBold.widthOfTextAtSize('Rp', size);
     const rpGap = 4/S;
@@ -1553,13 +1747,15 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
     cursorY -= 24/S; // jarak judul ke baris "NC" diperlebar
 
     page.drawText('NC', {x:taxX+pad, y:cursorY, size, font:fontBold, color:red});
-    drawAmount(nominal, cursorY);
-    cursorY -= 17/S;
+    drawAmount(nominalForNC, cursorY);
 
-    page.drawText(taxLineLabel(p.stampTax.type), {x:taxX+pad, y:cursorY, size, font:fontBold, color:red});
-    drawAmount(pph, cursorY);
+    deductionRows.forEach(row=>{
+      cursorY -= 17/S;
+      page.drawText(row.label, {x:taxX+pad, y:cursorY, size, font:fontBold, color:red});
+      drawAmount(row.amount, cursorY);
+    });
+
     cursorY -= 13/S;
-
     page.drawLine({start:{x:taxX+pad,y:cursorY+3/S}, end:{x:taxX+tw-pad,y:cursorY+3/S}, thickness:0.6*sc, color:red});
     cursorY -= 11/S;
     page.drawText('TOT BAYAR', {x:taxX+pad, y:cursorY, size, font:fontBold, color:red});
@@ -1594,7 +1790,7 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   if(showNote){
     const size = fs(SIZE);
     let cursorY = yBottom + noteHeightPx/S - 15/S;
-    page.drawText('PERLU KOREKSI:', {x:x+pad, y:cursorY, size, font:fontBold, color:red});
+    page.drawText('NOTE:', {x:x+pad, y:cursorY, size, font:fontBold, color:red});
     cursorY -= 12/S;
     const words = safeText(p.stampNote.text.trim());
     const lines = wrapText(words, 34);
