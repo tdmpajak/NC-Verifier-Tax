@@ -1511,7 +1511,12 @@ function computeEffectiveTax(p){
       dpp: t.totalDPP,
       ppn: t.ppn,
       pph: t.totalPPh,
-      deductionRows: t.breakdown.map(b=>({ idx:b.idx, label:b.shortLabel, fullLabel:b.fullLabel, amount:b.pph })),
+      // PENTING: "label" di sini yang benar-benar digambar di stempel (preview
+      // & PDF final) -- pakai fullLabel (sudah menyertakan kode COA seperti
+      // 214103/214105), BUKAN shortLabel yang tidak menyertakan kode COA.
+      // "shortLabel" tetap disimpan terpisah kalau suatu saat dibutuhkan versi
+      // ringkas tanpa kode.
+      deductionRows: t.breakdown.map(b=>({ idx:b.idx, label:b.fullLabel, shortLabel:b.shortLabel, fullLabel:b.fullLabel, amount:b.pph })),
       totalBayarAuto: t.totalBayar,
       itemCount: t.itemCount,
     };
