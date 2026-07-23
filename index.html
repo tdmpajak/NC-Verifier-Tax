@@ -224,14 +224,21 @@ input:checked + .slider::before{transform:translateX(16px);}
       <input type="file" id="fileInput" accept="application/pdf">
     </div>
 
-    <div class="section-label">Dari NC Tracker<button class="btn btn-ghost btn-sm" id="btnLoadTrackerList" style="padding:2px 8px;font-size:10px;color:var(--ink-soft);">↻ Muat</button></div>
+    <div class="section-label">Dari Doc Tracker Tax<button class="btn btn-ghost btn-sm" id="btnLoadTrackerList" style="padding:2px 8px;font-size:10px;color:var(--ink-soft);">↻ Muat</button></div>
     <div id="trackerList" style="margin-bottom:4px;">
-      <div class="ocr-progress">Klik "↻ Muat" untuk lihat pengajuan yang menunggu verifikasi dari NC Tracker.</div>
+      <div class="ocr-progress">Klik "↻ Muat" untuk lihat pengajuan yang menunggu verifikasi dari Doc Tracker Tax.</div>
     </div>
 
     <div class="panel-block" id="trackerSendBox" style="display:none;">
-      <h4>Kirim ke NC Tracker</h4>
-      <div class="desc">Dokumen ini dari NC Tracker (ID: <span id="trackerIdLbl" class="mono"></span>). Kirim hasil stempel langsung, tanpa unduh/upload manual.</div>
+      <h4>Kirim ke Doc Tracker Tax</h4>
+      <div class="desc">Dokumen ini dari Doc Tracker Tax (ID: <span id="trackerIdLbl" class="mono"></span>, <span id="trackerJenisLbl" class="mono"></span>). Kirim hasil verifikasi langsung, tanpa unduh/upload manual.</div>
+      <div class="field">
+        <label>Keputusan</label>
+        <select id="trackerStatusSelect">
+          <option value="Terverifikasi">Terverifikasi</option>
+          <option value="Ditolak">Ditolak</option>
+        </select>
+      </div>
       <div class="field">
         <label>Admin Verifikator</label>
         <select id="trackerAdminSelect">
@@ -241,10 +248,10 @@ input:checked + .slider::before{transform:translateX(16px);}
         </select>
       </div>
       <div class="field">
-        <label>Password Otorisasi</label>
-        <input type="password" id="trackerAuthPassword" placeholder="Password otorisasi admin">
+        <label>Catatan (opsional)</label>
+        <input type="text" id="trackerCatatan" placeholder="Catatan tambahan">
       </div>
-      <button class="btn btn-primary" id="btnSendToTracker" style="width:100%;justify-content:center;">📤 Kirim ke NC Tracker</button>
+      <button class="btn btn-primary" id="btnSendToTracker" style="width:100%;justify-content:center;">📤 Kirim ke Doc Tracker Tax</button>
       <div id="trackerSendMsg" style="font-size:11px;margin-top:6px;"></div>
     </div>
 
@@ -496,7 +503,7 @@ let App = {
   fileBytes:null, fileName:'', pdfjsDoc:null, pages:[], activePage:null, ocrRunning:false,
   loadToken:0, // dinaikkan setiap upload file baru — dipakai utk membatalkan sesi OCR file lama (lihat runAllOcr)
   signature:{dataUrl:DEFAULT_SIG_DATAURL, bytes:DEFAULT_SIG_BYTES, mime:'image/png', w:390, h:461, isDefault:true},
-  trackerMeta:null, // { id, cabang, namaPic } -- terisi kalau dokumen dimuat dari NC Tracker, null kalau upload manual
+  trackerMeta:null, // { id, cabang, namaPic } -- terisi kalau dokumen dimuat dari Doc Tracker Tax, null kalau upload manual
 };
 
 const $ = (sel,root=document)=>root.querySelector(sel);
@@ -611,10 +618,12 @@ function setOcrStatus(text, pct){
   $('#ocrStatusBox').innerHTML = `${text}<div class="bar"><div class="fill" style="width:${pct}%"></div></div>`;
 }
 
-/* ══════════ INTEGRASI NC TRACKER ══════════
-   NC Verifier "menumpang" ke backend Apps Script yang sama dengan NC Tracker
-   (satu Google Sheet & Drive). Tidak ada server terpisah -- semua permintaan
-   di bawah ini memanggil TRACKER_API_URL yang sama seperti tracking.js. */
+/* ══════════ INTEGRASI DOC TRACKER TAX ══════════
+   NC Verifier "menumpang" ke backend Apps Script yang sama dengan Doc Tracker
+   Tax (satu Google Sheet & Drive). Tidak ada server terpisah -- semua
+   permintaan di bawah ini memanggil TRACKER_API_URL yang sama seperti
+   tracking.js. Menu ubah/verifikasi status HANYA ada di sini (bukan lagi di
+   tracking.html), karena halaman ini tidak bisa diakses cabang/PIC. */
 let trackerRows = [];
 
 $('#btnLoadTrackerList').addEventListener('click', loadTrackerList);
@@ -645,6 +654,8 @@ async function loadTrackerList(){
         <div class="meta">
           <div class="pno">${escapeHtmlNCV(r['Cabang'])} — ${escapeHtmlNCV(r['Nama PIC']||'-')}</div>
           <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV(r['ID'])}</div>
+          <span class="badge badge-plain">${escapeHtmlNCV(r['Jenis Dokumen']||'-')}</span>
+          <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV((r['No Dokumen']||'-').split('\n')[0])}</div>
         </div>
       </div>
     `).join('');
@@ -658,7 +669,7 @@ async function loadTrackerList(){
 
 async function loadFromTracker(id){
   const box = $('#trackerList');
-  box.innerHTML = '<div class="ocr-progress">Mengambil berkas dari NC Tracker…</div>';
+  box.innerHTML = '<div class="ocr-progress">Mengambil berkas dari Doc Tracker Tax…</div>';
   try{
     const res = await fetch(TRACKER_API_URL, {
       method:'POST',
@@ -673,10 +684,12 @@ async function loadFromTracker(id){
     const file = new File([blob], result.fileName || (id + '.pdf'), {type:'application/pdf'});
 
     await handleFile(file); // handleFile mereset trackerMeta -- makanya diisi SETELAH ini selesai
-    App.trackerMeta = { id, cabang: result.cabang, namaPic: result.namaPic };
+    App.trackerMeta = { id, cabang: result.cabang, namaPic: result.namaPic, jenisDokumen: result.jenisDokumen };
     $('#trackerIdLbl').textContent = id;
+    $('#trackerJenisLbl').textContent = result.jenisDokumen || '';
     $('#trackerSendBox').style.display = 'block';
-    $('#trackerAuthPassword').value = '';
+    $('#trackerStatusSelect').value = 'Terverifikasi';
+    $('#trackerCatatan').value = '';
     $('#trackerSendMsg').textContent = '';
 
     loadTrackerList(); // refresh daftar
@@ -687,49 +700,57 @@ async function loadFromTracker(id){
 
 $('#btnSendToTracker').addEventListener('click', sendToTracker);
 
+// CATATAN: tidak ada lagi password otorisasi di sini -- panel ini hanya bisa
+// diakses lewat NC Verifier (bukan dari form cabang/PIC), jadi sudah aman
+// tanpa kode tambahan. Kalau Keputusan = "Ditolak", PDF tidak perlu distempel
+// ulang -- cukup update status & catatan tanpa mengganti berkas.
 async function sendToTracker(){
-  if(!App.trackerMeta){ alert('Dokumen ini bukan dari NC Tracker.'); return; }
+  if(!App.trackerMeta){ alert('Dokumen ini bukan dari Doc Tracker Tax.'); return; }
+  const status = $('#trackerStatusSelect').value;
   const admin = $('#trackerAdminSelect').value;
-  const authPassword = $('#trackerAuthPassword').value;
+  const catatan = $('#trackerCatatan').value.trim();
   const msg = $('#trackerSendMsg');
   msg.style.color = 'var(--brick)';
 
   if(!admin){ msg.textContent = 'Pilih admin verifikator dulu.'; return; }
-  if(!authPassword){ msg.textContent = 'Isi password otorisasi dulu.'; return; }
-  if(!App.pages.some(p=>p.isNC)){ msg.textContent = 'Tidak ada halaman NC untuk dikirim.'; return; }
+  if(status === 'Terverifikasi' && !App.pages.some(p=>p.isNC)){
+    msg.textContent = 'Tidak ada halaman berstempel untuk dikirim.';
+    return;
+  }
 
   const btn = $('#btnSendToTracker');
   btn.disabled = true;
-  btn.textContent = '⏳ Menyusun PDF…';
   msg.textContent = '';
 
   try{
-    const bytes = await buildFinalPdfBytes();
-    btn.textContent = '⏳ Mengirim ke NC Tracker…';
-    const fileData = await bytesToBase64DataUrl(bytes, 'application/pdf');
-    const fileName = (App.fileName.replace(/\.pdf$/i,'') || 'dokumen') + '_verified.pdf';
+    const payload = { action:'verify', id: App.trackerMeta.id, status, admin, catatan };
+
+    if(status === 'Terverifikasi'){
+      btn.textContent = '⏳ Menyusun PDF…';
+      const bytes = await buildFinalPdfBytes();
+      btn.textContent = '⏳ Mengirim ke Doc Tracker Tax…';
+      payload.fileData = await bytesToBase64DataUrl(bytes, 'application/pdf');
+      payload.fileName = (App.fileName.replace(/\.pdf$/i,'') || 'dokumen') + '_verified.pdf';
+    } else {
+      btn.textContent = '⏳ Mengirim ke Doc Tracker Tax…';
+    }
 
     const res = await fetch(TRACKER_API_URL, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({
-        action:'verify',
-        id: App.trackerMeta.id,
-        status:'Terverifikasi',
-        admin, authPassword, fileName, fileData,
-      })
+      body: JSON.stringify(payload)
     });
     const result = await res.json();
-    if(!result.success) throw new Error(result.error || 'Gagal mengirim ke NC Tracker');
+    if(!result.success) throw new Error(result.error || 'Gagal mengirim ke Doc Tracker Tax');
 
     msg.style.color = 'var(--ok)';
-    msg.textContent = '✓ Berhasil dikirim ke NC Tracker. Status pengajuan sudah berubah jadi Terverifikasi.';
+    msg.textContent = `✓ Berhasil dikirim ke Doc Tracker Tax. Status pengajuan sudah berubah jadi ${status}.`;
   }catch(err){
     msg.style.color = 'var(--brick)';
     msg.textContent = 'Gagal: ' + err.message;
   }finally{
     btn.disabled = false;
-    btn.textContent = '📤 Kirim ke NC Tracker';
+    btn.textContent = '📤 Kirim ke Doc Tracker Tax';
   }
 }
 
@@ -1593,7 +1614,7 @@ $('#btnTaxConfig').addEventListener('click', ()=>{
 $('#btnGenerate').addEventListener('click', generateFinalPDF);
 
 // Menyusun bytes PDF final (dengan stempel) -- dipakai bersama oleh tombol
-// "Generate PDF Final" (download ke disk) dan "Kirim ke NC Tracker" (upload
+// "Generate PDF Final" (download ke disk) dan "Kirim ke Doc Tracker Tax" (upload
 // langsung), supaya logikanya tidak dobel/berisiko beda hasil.
 async function buildFinalPdfBytes(){
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
