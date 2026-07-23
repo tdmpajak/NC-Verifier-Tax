@@ -190,6 +190,12 @@ input:checked + .slider::before{transform:translateX(16px);}
 .items-empty{font-size:11px;color:var(--ink-soft);text-align:center;padding:14px 8px;background:#fff;border:1px dashed var(--line);border-radius:7px;margin-bottom:8px;}
 .calc-row.item-line{font-size:10.5px;}
 .calc-row.item-line .l{color:var(--ink-soft);}
+.total-bayar-edit{display:flex;align-items:center;gap:4px;}
+.total-bayar-edit .pfx{font-size:11.5px;font-weight:700;color:var(--brick);}
+.total-bayar-input{width:92px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:700;color:var(--brick);background:#fff;border:1px solid var(--line);border-radius:5px;padding:2px 5px;}
+.total-bayar-input:focus{outline:none;border-color:var(--brick);box-shadow:0 0 0 2px var(--brick-light);}
+.total-bayar-reset{background:none;border:none;cursor:pointer;color:var(--brick);font-size:13px;padding:0 2px;line-height:1;}
+.total-bayar-reset:hover{opacity:.7;}
 
 ::-webkit-scrollbar{width:9px;height:9px;}
 ::-webkit-scrollbar-thumb{background:#C9C0A9;border-radius:5px;}
@@ -323,15 +329,23 @@ const POT_TYPES = {
 
 // Pilihan cepat (chip) untuk tiap baris item pada mode Multi-Item — memakai
 // tarif & kode COA yang sama persis dengan POT_TYPES supaya konsisten dengan
-// mode Transaksi Tunggal, ditambah satu opsi semu 'none' (tidak kena PPh).
+// mode Transaksi Tunggal (kode COA seperti 214103/214105 ikut ditampilkan di
+// chip-nya juga), ditambah satu opsi semu 'none' (tidak kena PPh).
+const TAX_ITEM_LABELS = {
+  'jasa-op':      'Jasa OP',
+  'jasa-badan':   'Jasa Badan',
+  'sewa-tanah':   'Sewa T/B',
+  'sewa-lain':    'Sewa Lain',
+  'reward-op':    'Reward OP',
+  'reward-badan': 'Reward Badan',
+};
 const TAX_ITEM_CHOICES = [
   { key:'none', label:'Tidak Kena Pajak' },
-  { key:'jasa-op', label:'PPh 21 Jasa OP · 2,5%' },
-  { key:'jasa-badan', label:'PPh 23 Jasa Badan · 2%' },
-  { key:'sewa-tanah', label:'PPh 4(2) Sewa T/B · 10% Final' },
-  { key:'sewa-lain', label:'PPh 23 Sewa Lain · 2%' },
-  { key:'reward-op', label:'PPh 21 Reward OP · 2,5%' },
-  { key:'reward-badan', label:'PPh 23 Reward Badan · 15%' },
+  ...Object.keys(POT_TYPES).map(k=>{
+    const c = POT_TYPES[k];
+    const finalTag = k==='sewa-tanah' ? ' Final' : '';
+    return { key:k, label:`${c.short} (${c.coa}) ${TAX_ITEM_LABELS[k]} · ${formatRate(c.tarif)}${finalTag}` };
+  }),
 ];
 let taxItemSeq = 1; // penomor id unik utk baris item multi-item, lintas semua halaman
 
@@ -600,7 +614,7 @@ async function handleFile(file){
       stampPosManual:false,
       stampScale:1,
       zoom:1,
-      stampTax:{enabled:false, type:'sewa-lain', pkp:'non', autoType:true, mode:'single', items:[]},
+      stampTax:{enabled:false, type:'sewa-lain', pkp:'non', autoType:true, mode:'single', items:[], manualTotalBayar:null},
       stampSign:{enabled:false, pos:'left', imgScale:1},
       stampNote:{enabled:false, text:''},
     });
@@ -1150,31 +1164,25 @@ function renderOverlays(p){
 
   let taxHtml = '';
   if(p.stampTax.enabled){
-    if((p.stampTax.mode||'single')==='multi'){
-      const t = computeMultiTotals(p);
-      const rows = t.breakdown.length
-        ? t.breakdown.map(b=>`<div class="row"><span>${b.shortLabel}</span><span>${rp(b.pph)}</span></div>`).join('')
+    const t = computeEffectiveTax(p);
+    if(t.isMulti){
+      const rows = t.deductionRows.length
+        ? t.deductionRows.map(r=>`<div class="row"><span>${r.label}</span><span>${rp(r.amount)}</span></div>`).join('')
         : '';
       taxHtml = `
         <div class="tax-box">
           <div class="cap">Stamp Potongan Pajak</div>
-          <div class="row"><span>NC</span><span>${rp(t.totalTagihan)}</span></div>
+          <div class="row"><span>NC</span><span>${rp(t.nominal)}</span></div>
           ${rows}
-          <div class="row total"><span>TOT BAYAR</span><span>${rp(t.totalBayar)}</span></div>
+          <div class="row total"><span>TOT BAYAR</span><span>${rp(t.totalBayar)}${t.isManual?' ✎':''}</span></div>
         </div>`;
     } else {
-      const conf = POT_TYPES[p.stampTax.type];
-      const nominal = parseIdNumber(p.ncFields.jumlah);
-      const isPKP = p.stampTax.pkp==='pkp';
-      const dpp = isPKP ? nominal/1.11 : nominal;
-      const pph = dpp*conf.tarif;
-      const totalBayar = nominal-pph;
       taxHtml = `
         <div class="tax-box">
           <div class="cap">Stamp Potongan Pajak</div>
-          <div class="row"><span>NC</span><span>${rp(nominal)}</span></div>
-          <div class="row"><span>${taxLineLabel(p.stampTax.type)}</span><span>${rp(pph)}</span></div>
-          <div class="row total"><span>TOT BAYAR</span><span>${rp(totalBayar)}</span></div>
+          <div class="row"><span>NC</span><span>${rp(t.nominal)}</span></div>
+          <div class="row"><span>${taxLineLabel(p.stampTax.type)}</span><span>${rp(t.pph)}</span></div>
+          <div class="row total"><span>TOT BAYAR</span><span>${rp(t.totalBayar)}${t.isManual?' ✎':''}</span></div>
         </div>`;
     }
   }
@@ -1277,13 +1285,13 @@ function renderRightPanel(){
     return;
   }
 
+  const t = computeEffectiveTax(p);
   const conf = POT_TYPES[p.stampTax.type];
-  const nominal = parseIdNumber(p.ncFields.jumlah);
-  const isPKP = p.stampTax.pkp==='pkp';
-  const dpp = isPKP ? nominal/1.11 : nominal;
-  const ppn = isPKP ? nominal - dpp : 0;
-  const pph = dpp * conf.tarif;
-  const totalBayar = nominal - pph;
+  const nominal = t.nominal;
+  const isPKP = t.isPKP;
+  const dpp = t.dpp;
+  const ppn = t.ppn;
+  const pph = t.pph;
 
   const suggestion = analyzeTaxSuggestion(p);
   const suggestLabel = suggestion.suggestedKey ? `${POT_TYPES[suggestion.suggestedKey].short} (${POT_TYPES[suggestion.suggestedKey].coa}) ${formatRate(POT_TYPES[suggestion.suggestedKey].tarif)}` : null;
@@ -1354,7 +1362,7 @@ function renderRightPanel(){
         <div class="calc-row"><span class="l">Nominal Tagihan</span><span>${rp(nominal)}</span></div>
         ${isPKP?`<div class="calc-row"><span class="l">DPP</span><span>${rp(dpp)}</span></div><div class="calc-row ppn"><span class="l">PPN 11%</span><span>${rp(ppn)}</span></div>`:''}
         <div class="calc-row"><span class="l">Potongan (${taxLineLabel(p.stampTax.type)})</span><span>− ${rp(pph)}</span></div>
-        <div class="calc-row total"><span>Total Bayar</span><span>${rp(totalBayar)}</span></div>
+        <div class="calc-row total"><span>Total Bayar</span>${totalBayarInputHtml(p, t)}</div>
       </div>
       ` : `
       <div class="items-hint">1 NC, beberapa baris transaksi — pilih tarif hanya pada item yang kena pajak. PPN 11% (kalau PKP) dihitung sekali dari total seluruh item.</div>
@@ -1414,18 +1422,12 @@ function updateCalcBox(p){
   if((p.stampTax.mode||'single')!=='single') return;
   const box = document.querySelector('.calc-box');
   if(!box || !p.isNC) return;
-  const conf = POT_TYPES[p.stampTax.type];
-  const nominal = parseIdNumber(p.ncFields.jumlah);
-  const isPKP = p.stampTax.pkp==='pkp';
-  const dpp = isPKP ? nominal/1.11 : nominal;
-  const ppn = isPKP ? nominal - dpp : 0;
-  const pph = dpp * conf.tarif;
-  const totalBayar = nominal - pph;
+  const t = computeEffectiveTax(p);
   box.innerHTML = `
-    <div class="calc-row"><span class="l">Nominal Tagihan</span><span>${rp(nominal)}</span></div>
-    ${isPKP?`<div class="calc-row"><span class="l">DPP</span><span>${rp(dpp)}</span></div><div class="calc-row ppn"><span class="l">PPN 11%</span><span>${rp(ppn)}</span></div>`:''}
-    <div class="calc-row"><span class="l">Potongan (${taxLineLabel(p.stampTax.type)})</span><span>− ${rp(pph)}</span></div>
-    <div class="calc-row total"><span>Total Bayar</span><span>${rp(totalBayar)}</span></div>
+    <div class="calc-row"><span class="l">Nominal Tagihan</span><span>${rp(t.nominal)}</span></div>
+    ${t.isPKP?`<div class="calc-row"><span class="l">DPP</span><span>${rp(t.dpp)}</span></div><div class="calc-row ppn"><span class="l">PPN 11%</span><span>${rp(t.ppn)}</span></div>`:''}
+    <div class="calc-row"><span class="l">Potongan (${taxLineLabel(p.stampTax.type)})</span><span>− ${rp(t.pph)}</span></div>
+    <div class="calc-row total"><span>Total Bayar</span>${totalBayarInputHtml(p, t)}</div>
   `;
 }
 function updateVerifDate(num,val){
@@ -1492,6 +1494,81 @@ function computeMultiTotals(p){
   return { totalDPP, ppn, totalTagihan, totalPPh, totalBayar, breakdown, isPKP, itemCount:items.length };
 }
 
+// Menyatukan perhitungan mode Transaksi Tunggal & Multi-Item jadi SATU bentuk
+// hasil yang konsisten, sekaligus menerapkan override manual "Total Bayar"
+// (p.stampTax.manualTotalBayar) kalau diisi admin. Dipakai di SEMUA tempat
+// yang menampilkan/menggambar angka TOT BAYAR (panel kanan, preview di
+// canvas, & PDF final) supaya angkanya selalu sinkron satu sama lain.
+function computeEffectiveTax(p){
+  const isMulti = (p.stampTax.mode||'single')==='multi';
+  let result;
+  if(isMulti){
+    const t = computeMultiTotals(p);
+    result = {
+      isMulti:true,
+      nominal: t.totalTagihan, // dipakai sebagai baris "NC" di stempel
+      isPKP: t.isPKP,
+      dpp: t.totalDPP,
+      ppn: t.ppn,
+      pph: t.totalPPh,
+      deductionRows: t.breakdown.map(b=>({ idx:b.idx, label:b.shortLabel, fullLabel:b.fullLabel, amount:b.pph })),
+      totalBayarAuto: t.totalBayar,
+      itemCount: t.itemCount,
+    };
+  } else {
+    const conf = POT_TYPES[p.stampTax.type];
+    const nominal = parseIdNumber(p.ncFields.jumlah);
+    const isPKP = p.stampTax.pkp==='pkp';
+    const dpp = isPKP ? nominal/1.11 : nominal;
+    const ppn = isPKP ? nominal-dpp : 0;
+    const pph = dpp*conf.tarif;
+    result = {
+      isMulti:false,
+      nominal,
+      isPKP,
+      dpp,
+      ppn,
+      pph,
+      deductionRows: [{ label:taxLineLabel(p.stampTax.type), fullLabel:taxLineLabel(p.stampTax.type), amount:pph }],
+      totalBayarAuto: nominal-pph,
+    };
+  }
+  const manual = p.stampTax.manualTotalBayar;
+  const hasManual = (manual!==null && manual!==undefined && manual!=='' && !isNaN(manual));
+  result.totalBayar = hasManual ? Number(manual) : result.totalBayarAuto;
+  result.isManual = hasManual;
+  return result;
+}
+
+// Dipanggil dari input "Total Bayar" saat admin mengetik angka manual.
+// Meniru pola formatTaxItemInput(): format ULANG hanya elemen input itu
+// sendiri (bukan rebuild seluruh calc-box), supaya kursor/fokus tidak
+// meloncat ke ujung setiap kali mengetik satu digit.
+function updateManualTotalBayar(num, el){
+  const raw = el.value.replace(/[^0-9]/g,'');
+  el.value = raw ? parseInt(raw,10).toLocaleString('id-ID') : '';
+  const p = App.pages.find(pg=>pg.num===num);
+  p.stampTax.manualTotalBayar = raw ? parseInt(raw,10) : null;
+  renderOverlays(p);
+  const wrap = document.getElementById('totalBayarEdit'+num);
+  const btn = wrap ? wrap.querySelector('.total-bayar-reset') : null;
+  if(btn) btn.style.display = p.stampTax.manualTotalBayar!=null ? '' : 'none';
+}
+// Klik tombol ↺ -- di luar konteks mengetik, jadi aman rebuild penuh.
+function resetManualTotalBayar(num){
+  const p = App.pages.find(pg=>pg.num===num);
+  p.stampTax.manualTotalBayar = null;
+  renderOverlays(p);
+  if((p.stampTax.mode||'single')==='single') updateCalcBox(p); else updateMultiCalcBox(p);
+}
+function totalBayarInputHtml(p, t){
+  const val = Math.round(t.totalBayar).toLocaleString('id-ID');
+  return `<span class="total-bayar-edit" id="totalBayarEdit${p.num}">
+    <span class="pfx">Rp</span><input type="text" class="total-bayar-input" value="${val}" oninput="updateManualTotalBayar(${p.num},this)">
+    <button type="button" class="total-bayar-reset" title="Kembali ke hitungan otomatis (${rp(t.totalBayarAuto)})" onclick="resetManualTotalBayar(${p.num})" style="${t.isManual?'':'display:none;'}">↺</button>
+  </span>`;
+}
+
 function switchTaxMode(num, mode){
   const p = App.pages.find(pg=>pg.num===num);
   p.stampTax.mode = mode;
@@ -1555,14 +1632,14 @@ function renderTaxItemsList(p){
 function updateMultiCalcBox(p){
   const box = $('#multiCalcBox');
   if(!box) return;
-  const t = computeMultiTotals(p);
+  const t = computeEffectiveTax(p);
   box.innerHTML = `
-    <div class="calc-row"><span class="l">Total DPP (${t.itemCount} item)</span><span>${rp(t.totalDPP)}</span></div>
+    <div class="calc-row"><span class="l">Total DPP (${t.itemCount} item)</span><span>${rp(t.dpp)}</span></div>
     ${t.isPKP?`<div class="calc-row ppn"><span class="l">PPN 11%</span><span>${rp(t.ppn)}</span></div>`:''}
-    ${t.breakdown.length ? t.breakdown.map(b=>`<div class="calc-row item-line"><span class="l">✂ Item #${b.idx+1} (${b.fullLabel})</span><span>− ${rp(b.pph)}</span></div>`).join('')
+    ${t.deductionRows.length ? t.deductionRows.map(r=>`<div class="calc-row item-line"><span class="l">✂ Item #${r.idx+1} (${r.fullLabel})</span><span>− ${rp(r.amount)}</span></div>`).join('')
       : `<div class="calc-row item-line"><span class="l">Tidak ada item yang kena PPh</span><span>—</span></div>`}
-    <div class="calc-row"><span class="l">Total PPh Dipotong</span><span>− ${rp(t.totalPPh)}</span></div>
-    <div class="calc-row total"><span>Total Bayar</span><span>${rp(t.totalBayar)}</span></div>
+    <div class="calc-row"><span class="l">Total PPh Dipotong</span><span>− ${rp(t.pph)}</span></div>
+    <div class="calc-row total"><span>Total Bayar</span>${totalBayarInputHtml(p, t)}</div>
   `;
 }
 
@@ -1718,26 +1795,15 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   }
 
   if(p.stampTax.enabled){
-    const isMulti = (p.stampTax.mode||'single')==='multi';
     // Baris "NC" (nominal total) + daftar baris potongan — 1 baris tetap utk
     // mode Transaksi Tunggal, N baris (bisa 0) utk mode Multi-Item mengikuti
-    // jumlah item yang benar-benar kena PPh.
-    let nominalForNC, totalBayar, deductionRows;
-    if(isMulti){
-      const t = multiTotalsForHeight || computeMultiTotals(p);
-      nominalForNC = t.totalTagihan;
-      totalBayar = t.totalBayar;
-      deductionRows = t.breakdown.map(b=>({ label:b.shortLabel, amount:b.pph }));
-    } else {
-      const conf = POT_TYPES[p.stampTax.type];
-      const nominal = parseIdNumber(p.ncFields.jumlah);
-      const isPKP = p.stampTax.pkp==='pkp';
-      const dpp = isPKP ? nominal/1.11 : nominal;
-      const pph = dpp*conf.tarif;
-      nominalForNC = nominal;
-      totalBayar = nominal-pph;
-      deductionRows = [{ label:taxLineLabel(p.stampTax.type), amount:pph }];
-    }
+    // jumlah item yang benar-benar kena PPh. Angka TOT BAYAR memakai
+    // computeEffectiveTax() supaya otomatis ikut override manual kalau admin
+    // mengubah angka Total Bayar secara manual di panel kanan.
+    const t = computeEffectiveTax(p);
+    const nominalForNC = t.nominal;
+    const totalBayar = t.totalBayar;
+    const deductionRows = t.deductionRows;
 
     const tw = taxBoxWPx/S;
     const size = fs(SIZE);
