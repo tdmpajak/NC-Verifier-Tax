@@ -66,6 +66,15 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--paper);color:var(--
 .sig-switch button:hover{background:rgba(255,255,255,.12);}
 .sig-switch button.active{background:#fff;color:#1a1a1a;}
 
+.tracker-tabs{display:flex;gap:5px;margin-bottom:8px;}
+.tracker-tabs button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);font-size:10.5px;font-weight:600;padding:5px 6px;border-radius:16px;cursor:pointer;}
+.tracker-tabs button:hover{background:var(--paper-deep);}
+.tracker-tabs button.active{background:var(--brick);border-color:var(--brick);color:#fff;}
+.tracker-status-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:9px;display:inline-block;margin-left:4px;}
+.tracker-status-badge.verified{background:#DCF3E4;color:#1E7A42;}
+.tracker-status-badge.rejected{background:#FBE1DE;color:#B23A2C;}
+.tracker-correction-note{font-size:10px;color:var(--brick);background:#FBE9C8;border-radius:6px;padding:6px 8px;margin-bottom:8px;line-height:1.5;}
+
 .left{grid-area:left;background:var(--paper-deep);border-right:1px solid var(--line);overflow-y:auto;padding:14px 12px 40px;}
 .upload-zone{border:1.5px dashed #B7AE97;border-radius:var(--radius);padding:22px 12px;text-align:center;background:rgba(255,255,255,.4);cursor:pointer;transition:.15s;}
 .upload-zone:hover{background:rgba(255,255,255,.75);border-color:var(--brick);}
@@ -95,12 +104,13 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--paper);color:var(--
 .dot.on.green{background:var(--ok);border-color:var(--ok);}
 .dot.on.gold{background:var(--gold);border-color:var(--gold);}
 
-.main{grid-area:main;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:28px 20px 60px;position:relative;}
-.empty-state{margin:auto;text-align:center;color:var(--ink-soft);max-width:340px;}
+.main{grid-area:main;overflow:auto;padding:28px 20px 60px;position:relative;cursor:grab;}
+.main.panning{cursor:grabbing;}
+.empty-state{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--ink-soft);max-width:340px;width:calc(100% - 40px);}
 .empty-state .ic{font-size:34px;margin-bottom:10px;}
 .empty-state h3{font-family:'Source Serif 4',serif;font-size:18px;color:var(--ink);margin-bottom:6px;}
 .empty-state p{font-size:12.5px;line-height:1.6;}
-.page-header{width:100%;max-width:900px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
+.page-header{width:100%;max-width:900px;margin:0 auto 10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
 .page-header h2{font-family:'Source Serif 4',serif;font-size:17px;}
 .page-header .hint{font-size:11px;color:var(--ink-soft);}
 .zoom-controls{display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:3px;}
@@ -109,7 +119,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--paper);color:var(--
 .zoom-controls .zlbl{font-size:10.5px;font-weight:700;color:var(--ink-soft);min-width:38px;text-align:center;}
 .zoom-controls .zfit{font-size:9.5px;padding:0 8px;border-radius:12px;}
 
-.canvas-stage{position:relative;box-shadow:var(--shadow);border:1px solid var(--line);background:#fff;}
+.canvas-stage{position:relative;box-shadow:var(--shadow);border:1px solid var(--line);background:#fff;margin:0 auto;}
 .canvas-wrap{position:relative;transform-origin:top left;line-height:0;}
 .canvas-wrap canvas{display:block;}
 
@@ -130,7 +140,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--paper);color:var(--
 .stamp-group .sig-block .dt{font-size:11px;line-height:1.5;color:var(--brick);font-weight:700;white-space:nowrap;}
 .stamp-group .sig-block.sig-left{padding-right:8px;margin-right:3px;}
 .stamp-group .sig-block.sig-right{padding-left:8px;margin-left:3px;}
-.stamp-group .note-block{color:var(--brick);font-size:11px;font-weight:700;max-width:320px;line-height:1.6;margin-top:9px;padding-top:7px;}
+.stamp-group .note-block{color:var(--brick);font-size:11px;font-weight:700;max-width:320px;line-height:1.6;margin-top:9px;padding-top:7px;white-space:pre-wrap;}
 .stamp-group .note-block .cap2{color:var(--brick);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;}
 
 .right{grid-area:right;background:var(--card);border-left:1px solid var(--line);overflow-y:auto;padding:16px 16px 60px;}
@@ -235,6 +245,10 @@ input:checked + .slider::before{transform:translateX(16px);}
     </div>
 
     <div class="section-label">Dari Doc Tracker Tax<button class="btn btn-ghost btn-sm" id="btnLoadTrackerList" style="padding:2px 8px;font-size:10px;color:var(--ink-soft);">↻ Muat</button></div>
+    <div class="tracker-tabs" id="trackerTabs">
+      <button type="button" class="active" data-mode="pending">Menunggu</button>
+      <button type="button" data-mode="done">Sudah Diproses</button>
+    </div>
     <div id="trackerList" style="margin-bottom:4px;">
       <div class="ocr-progress">Klik "↻ Muat" untuk lihat pengajuan yang menunggu verifikasi dari Doc Tracker Tax.</div>
     </div>
@@ -242,6 +256,9 @@ input:checked + .slider::before{transform:translateX(16px);}
     <div class="panel-block" id="trackerSendBox" style="display:none;">
       <h4>Kirim ke Doc Tracker Tax</h4>
       <div class="desc">Dokumen ini dari Doc Tracker Tax (ID: <span id="trackerIdLbl" class="mono"></span>, <span id="trackerJenisLbl" class="mono"></span>). Kirim hasil verifikasi langsung, tanpa unduh/upload manual.</div>
+      <div class="tracker-correction-note" id="trackerCorrectionNote" style="display:none;">
+        ✎ Ini pengajuan yang <strong>sudah pernah diproses</strong>. Keputusan/Catatan/Admin di bawah sudah diisi otomatis sesuai data sebelumnya -- ubah seperlunya, lalu kirim untuk MENIMPA keputusan lama.
+      </div>
       <div class="field">
         <label>Keputusan</label>
         <select id="trackerStatusSelect">
@@ -610,6 +627,7 @@ async function handleFile(file){
   App.loadToken++; // tandai sesi baru — sesi OCR file sebelumnya (jika masih berjalan) akan dihentikan otomatis
   App.fileName = file.name;
   App.trackerMeta = null; // direset di sini; loadFromTracker akan mengisinya lagi SETELAH handleFile selesai
+  _mountedCanvasPageNum = null; // file baru -- paksa layoutCanvas mount ulang bitmap-nya (lihat catatan di layoutCanvas)
   $('#trackerSendBox').style.display = 'none';
   $('#fileNameTag').textContent = file.name;
   const buf = await file.arrayBuffer();
@@ -667,14 +685,41 @@ function setOcrStatus(text, pct){
    permintaan di bawah ini memanggil TRACKER_API_URL yang sama seperti
    tracking.js. Menu ubah/verifikasi status HANYA ada di sini (bukan lagi di
    tracking.html), karena halaman ini tidak bisa diakses cabang/PIC. */
-let trackerRows = [];
+let trackerRawData = [];    // seluruh baris dari server (belum difilter mode)
+let trackerRows = [];       // hasil filter sesuai tab aktif, dipakai untuk render
+let trackerMode = 'pending'; // 'pending' = Menunggu Verifikasi, 'done' = sudah Terverifikasi/Ditolak (utk koreksi)
 let trackerListFetching = false; // cegah request numpuk kalau polling sebelumnya belum selesai
 let trackerListSnapshot = ''; // dipakai untuk deteksi perubahan supaya tidak render ulang & bikin kedip tiap polling
 
 $('#btnLoadTrackerList').addEventListener('click', () => loadTrackerList(false));
+$$('#trackerTabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    $$('#trackerTabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    trackerMode = btn.dataset.mode;
+    applyTrackerFilter();
+  });
+});
 
 function escapeHtmlNCV(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// Menyaring trackerRawData sesuai tab yang aktif -- dipanggil tiap ganti tab
+// ATAU tiap kali data baru selesai dimuat dari server.
+function applyTrackerFilter(){
+  if(trackerMode === 'pending'){
+    trackerRows = trackerRawData.filter(r => r['Status']==='Menunggu Verifikasi' && r['File Berkas']);
+  } else {
+    // Tab "Sudah Diproses" -- untuk KOREKSI pengajuan yang salah pilih
+    // Terverifikasi/Ditolak. Diurutkan dari yang paling baru diproses,
+    // dibatasi 50 teratas supaya daftar tidak kepanjangan.
+    trackerRows = trackerRawData
+      .filter(r => (r['Status']==='Terverifikasi' || r['Status']==='Ditolak') && r['File Berkas'])
+      .sort((a,b)=> new Date(b['Tanggal Verifikasi']||0) - new Date(a['Tanggal Verifikasi']||0))
+      .slice(0,50);
+  }
+  renderTrackerList();
 }
 
 // silent=true dipakai untuk auto-refresh berkala: tidak menampilkan ulang
@@ -697,8 +742,7 @@ async function loadTrackerList(silent){
     const result = await res.json();
     if(!result.success) throw new Error(result.error || 'Gagal memuat daftar');
 
-    const newRows = result.data.filter(r => r['Status'] === 'Menunggu Verifikasi' && r['File Berkas']);
-    const snapshot = JSON.stringify(newRows.map(r => r['ID']));
+    const snapshot = JSON.stringify(result.data.map(r => [r['ID'], r['Status'], r['Tanggal Verifikasi']]));
 
     // Kalau ini polling diam-diam dan datanya persis sama seperti sebelumnya,
     // tidak perlu render ulang sama sekali.
@@ -707,8 +751,8 @@ async function loadTrackerList(silent){
       return;
     }
     trackerListSnapshot = snapshot;
-    trackerRows = newRows;
-    renderTrackerList();
+    trackerRawData = result.data;
+    applyTrackerFilter();
   }catch(err){
     if(!silent) box.innerHTML = `<div class="ocr-progress">Gagal memuat: ${err.message}</div>`;
     // Kalau silent (auto-refresh) dan gagal, biarkan daftar lama tetap tampil.
@@ -720,19 +764,25 @@ async function loadTrackerList(silent){
 function renderTrackerList(){
   const box = $('#trackerList');
   if(trackerRows.length === 0){
-    box.innerHTML = '<div class="ocr-progress">Tidak ada pengajuan yang menunggu verifikasi saat ini.</div>';
+    box.innerHTML = trackerMode==='pending'
+      ? '<div class="ocr-progress">Tidak ada pengajuan yang menunggu verifikasi saat ini.</div>'
+      : '<div class="ocr-progress">Belum ada pengajuan yang sudah diproses.</div>';
     return;
   }
-  box.innerHTML = trackerRows.map(r => `
+  box.innerHTML = trackerRows.map(r => {
+    const badge = r['Status']==='Terverifikasi' ? '<span class="tracker-status-badge verified">Terverifikasi</span>'
+      : r['Status']==='Ditolak' ? '<span class="tracker-status-badge rejected">Ditolak</span>' : '';
+    return `
     <div class="page-card" data-id="${escapeHtmlNCV(r['ID'])}" style="cursor:pointer;">
       <div class="meta">
-        <div class="pno">${escapeHtmlNCV(r['Cabang'])} — ${escapeHtmlNCV(r['Nama PIC']||'-')}</div>
+        <div class="pno">${escapeHtmlNCV(r['Cabang'])} — ${escapeHtmlNCV(r['Nama PIC']||'-')}${badge}</div>
         <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV(r['ID'])}</div>
         <span class="badge badge-plain">${escapeHtmlNCV(r['Jenis Dokumen']||'-')}</span>
         <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV((r['No Dokumen']||'-').split('\n')[0])}</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   $$('#trackerList [data-id]').forEach(el=>{
     el.addEventListener('click', ()=> loadFromTracker(el.dataset.id));
   });
@@ -772,8 +822,20 @@ async function loadFromTracker(id){
     $('#trackerIdLbl').textContent = id;
     $('#trackerJenisLbl').textContent = result.jenisDokumen || '';
     $('#trackerSendBox').style.display = 'block';
-    $('#trackerStatusSelect').value = 'Terverifikasi';
-    $('#trackerCatatan').value = '';
+
+    // Kalau statusnya sudah pernah diproses (bukan Menunggu Verifikasi), ini
+    // berarti verifikator sedang MENGOREKSI keputusan lama -- isi ulang
+    // Keputusan/Catatan/Admin dengan data sebelumnya supaya kelihatan apa
+    // yang mau diubah, dan tampilkan catatan peringatan koreksi.
+    const isCorrection = result.status && result.status !== 'Menunggu Verifikasi';
+    $('#trackerStatusSelect').value = isCorrection ? result.status : 'Terverifikasi';
+    $('#trackerCatatan').value = isCorrection ? (result.catatanAdmin || '') : '';
+    if(isCorrection && result.adminVerifikator){
+      const adminSel = $('#trackerAdminSelect');
+      if($$('option', adminSel).some(o=>o.value===result.adminVerifikator)) adminSel.value = result.adminVerifikator;
+    }
+    const corrNote = $('#trackerCorrectionNote');
+    if(corrNote) corrNote.style.display = isCorrection ? 'block' : 'none';
     $('#trackerSendMsg').textContent = '';
 
     loadTrackerList(false); // refresh daftar -- non-silent supaya box (yg sedang berisi pesan "Mengambil berkas...") pasti ditimpa ulang dgn daftar terbaru
@@ -826,11 +888,21 @@ async function sendToTracker(){
     const result = await res.json();
     if(!result.success) throw new Error(result.error || 'Gagal mengirim ke Doc Tracker Tax');
 
-    // Langsung hilangkan dari daftar sidebar tanpa menunggu polling/refresh
-    // berikutnya -- lebih terasa instan buat verifikator.
-    trackerRows = trackerRows.filter(r => r['ID'] !== App.trackerMeta.id);
-    trackerListSnapshot = JSON.stringify(trackerRows.map(r => r['ID']));
-    renderTrackerList();
+    // Refresh daftar sidebar supaya langsung terasa instan buat verifikator,
+    // tanpa perlu menunggu polling/klik "↻ Muat" berikutnya:
+    // - tab "Menunggu": item ini sekarang sudah diproses, jadi cukup dicoret
+    //   dari daftar (tidak perlu request ulang ke server).
+    // - tab "Sudah Diproses" (mode koreksi): item TETAP ada di daftar ini,
+    //   cuma status/badge-nya yang berubah -- jadi perlu muat ulang penuh
+    //   dari server supaya badge & posisi urutannya ikut ter-update.
+    if(trackerMode === 'pending'){
+      trackerRawData = trackerRawData.filter(r => r['ID'] !== App.trackerMeta.id);
+      applyTrackerFilter();
+      trackerListSnapshot = ''; // paksa polling berikutnya tetap sinkron ulang ke server
+    } else {
+      trackerListSnapshot = ''; // paksa muat ulang walau snapshot lama terlihat "sama"
+      loadTrackerList(false);
+    }
 
     msg.style.color = 'var(--ok)';
     msg.textContent = `✓ Berhasil dikirim ke Doc Tracker Tax. Status pengajuan sudah berubah jadi ${status}.`;
@@ -1169,11 +1241,24 @@ function selectPage(num){
   renderRightPanel();
 }
 
+let _mountedCanvasPageNum = null; // halaman mana yang bitmap-nya sedang ter-mount di #canvasWrap
+
+// PERCEPATAN: sebelumnya fungsi ini SELALU meng-clone & menggambar ulang
+// seluruh bitmap halaman (drawImage resolusi penuh) setiap kali dipanggil --
+// padahal fungsi ini juga dipanggil tiap klik zoom in/out dan tiap resize
+// jendela, yang sebenarnya cukup diselesaikan lewat CSS transform:scale()
+// tanpa perlu menggambar ulang pixel sama sekali. Sekarang clone/redraw
+// HANYA dilakukan saat halaman yang ditampilkan benar-benar berganti;
+// ganti zoom/resize di halaman yang sama tinggal scale ulang elemen yang
+// sudah ada -- jauh lebih ringan & terasa instan.
 function layoutCanvas(p){
   const stage = $('#canvasStage');
   const wrap = $('#canvasWrap');
-  wrap.innerHTML='';
-  wrap.appendChild(cloneCanvasWithContent(p.canvas));
+  if(_mountedCanvasPageNum !== p.num){
+    wrap.innerHTML='';
+    wrap.appendChild(cloneCanvasWithContent(p.canvas));
+    _mountedCanvasPageNum = p.num;
+  }
   wrap.style.width = p.canvas.width+'px';
   wrap.style.height = p.canvas.height+'px';
 
@@ -1212,6 +1297,38 @@ window.addEventListener('resize', ()=>{
     }
   }, 150);
 });
+
+/* ══════════ GESER PDF DENGAN KLIK-TAHAN-TARIK (drag to pan) ══════════
+   Sebelumnya andalan satu-satunya untuk geser saat di-zoom adalah
+   scrollbar bawaan browser, yang kadang tidak kelihatan jelas/kurang
+   intuitif. Sekarang area PDF bisa digeser langsung dengan klik kiri +
+   tahan + tarik ke arah mana pun (mirip Google Maps/Figma), terlepas dari
+   ada-tidaknya scrollbar. Diletakkan di sini (bukan di makeDraggable)
+   supaya tidak bentrok dengan drag stempel -- pointerdown yang berasal
+   dari dalam .stamp-group atau elemen interaktif (tombol, dsb) sengaja
+   diabaikan di sini. */
+(function initPdfPan(){
+  const mainEl = $('#mainPanel');
+  let panning=false, startX=0, startY=0, scrollLeft0=0, scrollTop0=0;
+
+  mainEl.addEventListener('pointerdown', e=>{
+    if(e.button !== 0) return; // klik kiri saja
+    if(e.target.closest('.stamp-group, button, input, select, textarea, a')) return;
+    panning = true;
+    startX = e.clientX; startY = e.clientY;
+    scrollLeft0 = mainEl.scrollLeft; scrollTop0 = mainEl.scrollTop;
+    mainEl.classList.add('panning');
+    mainEl.setPointerCapture(e.pointerId);
+  });
+  mainEl.addEventListener('pointermove', e=>{
+    if(!panning) return;
+    mainEl.scrollLeft = scrollLeft0 - (e.clientX - startX);
+    mainEl.scrollTop = scrollTop0 - (e.clientY - startY);
+  });
+  function endPan(){ panning=false; mainEl.classList.remove('panning'); }
+  mainEl.addEventListener('pointerup', endPan);
+  mainEl.addEventListener('pointercancel', endPan);
+})();
 
 function cloneCanvasWithContent(src){
   const c = document.createElement('canvas');
@@ -1818,7 +1935,10 @@ async function generateFinalPDF(){
 }
 
 function safeText(s){
-  return (s||'').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '?');
+  // \n (enter) sengaja DIPERTAHANKAN di sini (dulu ikut kena replace jadi
+  // "?" karena di luar rentang \x20-\x7E) -- supaya baris baru yang diketik
+  // user di kolom Note beneran jadi baris baru saat digambar ke stempel.
+  return (s||'').replace(/[^\x20-\x7E\u00A0-\u00FF\n]/g, '?');
 }
 
 function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, showSign){
@@ -1852,7 +1972,7 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   if(p.stampTax.enabled) taxHeightPx = 11 + (73 + dedRowsCount*17) + 11;
   const sigHeightPx = showSign ? 12+46*(p.stampSign.imgScale||1)+14+10+13+9 : 0;
   const bodyHeightPx = Math.max(taxHeightPx, sigHeightPx);
-  const noteLineCount = showNote ? Math.min(3, wrapText(safeText(p.stampNote.text.trim()), 34).length) : 0;
+  const noteLineCount = showNote ? Math.min(6, wrapText(safeText(p.stampNote.text.trim()), 34).length) : 0;
   const noteHeightPx = showNote ? (26 + noteLineCount*10 + 9) : 0;
 
   const totalWPx = taxBoxWPx + sigBoxWPx;
@@ -1961,22 +2081,30 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
     cursorY -= 12/S;
     const words = safeText(p.stampNote.text.trim());
     const lines = wrapText(words, 34);
-    lines.slice(0,3).forEach(line=>{
+    lines.slice(0,6).forEach(line=>{
       page.drawText(line, {x:x+pad, y:cursorY, size, font:fontBold, color:red});
       cursorY -= 10/S;
     });
   }
 }
 
+// Menghormati Enter (\n) yang diketik user sebagai baris baru PAKSA, sambil
+// tetap membungkus otomatis (word-wrap) kalau satu baris terlalu panjang.
+// Sebelumnya text.split(/\s+/) menganggap \n cuma spasi biasa, jadi semua
+// Enter yang diketik ikut "diratakan" jadi satu paragraf panjang.
 function wrapText(text, maxChars){
-  const words = text.split(/\s+/);
+  const paragraphs = text.split('\n');
   const lines = [];
-  let cur = '';
-  words.forEach(w=>{
-    if((cur+' '+w).trim().length > maxChars){ lines.push(cur.trim()); cur = w; }
-    else cur = (cur+' '+w).trim();
+  paragraphs.forEach(para=>{
+    if(para.trim()===''){ lines.push(''); return; } // baris kosong (Enter dobel) tetap dipertahankan
+    const words = para.split(/\s+/).filter(Boolean);
+    let cur = '';
+    words.forEach(w=>{
+      if((cur+' '+w).trim().length > maxChars){ lines.push(cur.trim()); cur = w; }
+      else cur = (cur+' '+w).trim();
+    });
+    if(cur) lines.push(cur);
   });
-  if(cur) lines.push(cur);
   return lines;
 }
 </script>
