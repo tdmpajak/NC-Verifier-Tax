@@ -639,47 +639,88 @@ function setOcrStatus(text, pct){
    tracking.js. Menu ubah/verifikasi status HANYA ada di sini (bukan lagi di
    tracking.html), karena halaman ini tidak bisa diakses cabang/PIC. */
 let trackerRows = [];
+let trackerListFetching = false; // cegah request numpuk kalau polling sebelumnya belum selesai
+let trackerListSnapshot = ''; // dipakai untuk deteksi perubahan supaya tidak render ulang & bikin kedip tiap polling
 
-$('#btnLoadTrackerList').addEventListener('click', loadTrackerList);
+$('#btnLoadTrackerList').addEventListener('click', () => loadTrackerList(false));
 
 function escapeHtmlNCV(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
-async function loadTrackerList(){
+// silent=true dipakai untuk auto-refresh berkala: tidak menampilkan ulang
+// "Memuat daftar..." dan dilewati sama sekali kalau datanya tidak berubah,
+// supaya daftar di sidebar tidak berkedip/reset posisi klik tiap beberapa detik.
+async function loadTrackerList(silent){
+  if(trackerListFetching) return;
+  trackerListFetching = true;
   const box = $('#trackerList');
+
   if(!TRACKER_API_URL || TRACKER_API_URL.includes('PASTE_URL')){
     box.innerHTML = '<div class="ocr-progress">TRACKER_API_URL belum diisi (lihat file config.js).</div>';
+    trackerListFetching = false;
     return;
   }
-  box.innerHTML = '<div class="ocr-progress">Memuat daftar…</div>';
+  if(!silent) box.innerHTML = '<div class="ocr-progress">Memuat daftar…</div>';
+
   try{
     const res = await fetch(`${TRACKER_API_URL}?action=list`);
     const result = await res.json();
     if(!result.success) throw new Error(result.error || 'Gagal memuat daftar');
 
-    trackerRows = result.data.filter(r => r['Status'] === 'Menunggu Verifikasi' && r['File Berkas']);
-    if(trackerRows.length === 0){
-      box.innerHTML = '<div class="ocr-progress">Tidak ada pengajuan yang menunggu verifikasi saat ini.</div>';
+    const newRows = result.data.filter(r => r['Status'] === 'Menunggu Verifikasi' && r['File Berkas']);
+    const snapshot = JSON.stringify(newRows.map(r => r['ID']));
+
+    // Kalau ini polling diam-diam dan datanya persis sama seperti sebelumnya,
+    // tidak perlu render ulang sama sekali.
+    if(silent && snapshot === trackerListSnapshot){
+      trackerListFetching = false;
       return;
     }
-    box.innerHTML = trackerRows.map(r => `
-      <div class="page-card" data-id="${escapeHtmlNCV(r['ID'])}" style="cursor:pointer;">
-        <div class="meta">
-          <div class="pno">${escapeHtmlNCV(r['Cabang'])} — ${escapeHtmlNCV(r['Nama PIC']||'-')}</div>
-          <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV(r['ID'])}</div>
-          <span class="badge badge-plain">${escapeHtmlNCV(r['Jenis Dokumen']||'-')}</span>
-          <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV((r['No Dokumen']||'-').split('\n')[0])}</div>
-        </div>
-      </div>
-    `).join('');
-    $$('#trackerList [data-id]').forEach(el=>{
-      el.addEventListener('click', ()=> loadFromTracker(el.dataset.id));
-    });
+    trackerListSnapshot = snapshot;
+    trackerRows = newRows;
+    renderTrackerList();
   }catch(err){
-    box.innerHTML = `<div class="ocr-progress">Gagal memuat: ${err.message}</div>`;
+    if(!silent) box.innerHTML = `<div class="ocr-progress">Gagal memuat: ${err.message}</div>`;
+    // Kalau silent (auto-refresh) dan gagal, biarkan daftar lama tetap tampil.
+  }finally{
+    trackerListFetching = false;
   }
 }
+
+function renderTrackerList(){
+  const box = $('#trackerList');
+  if(trackerRows.length === 0){
+    box.innerHTML = '<div class="ocr-progress">Tidak ada pengajuan yang menunggu verifikasi saat ini.</div>';
+    return;
+  }
+  box.innerHTML = trackerRows.map(r => `
+    <div class="page-card" data-id="${escapeHtmlNCV(r['ID'])}" style="cursor:pointer;">
+      <div class="meta">
+        <div class="pno">${escapeHtmlNCV(r['Cabang'])} — ${escapeHtmlNCV(r['Nama PIC']||'-')}</div>
+        <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV(r['ID'])}</div>
+        <span class="badge badge-plain">${escapeHtmlNCV(r['Jenis Dokumen']||'-')}</span>
+        <div style="font-size:10px;color:var(--ink-soft);margin-top:2px;">${escapeHtmlNCV((r['No Dokumen']||'-').split('\n')[0])}</div>
+      </div>
+    </div>
+  `).join('');
+  $$('#trackerList [data-id]').forEach(el=>{
+    el.addEventListener('click', ()=> loadFromTracker(el.dataset.id));
+  });
+}
+
+// Muat daftar begitu halaman dibuka -- tidak perlu klik "↻ Muat" dulu.
+loadTrackerList(false);
+
+// Auto-refresh berkala tiap 4 detik, dilewati kalau tab sedang tidak aktif
+// (hemat kuota) atau request sebelumnya masih berjalan.
+setInterval(() => {
+  if(document.hidden) return;
+  loadTrackerList(true);
+}, 4000);
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden) loadTrackerList(true);
+});
 
 async function loadFromTracker(id){
   const box = $('#trackerList');
@@ -706,7 +747,7 @@ async function loadFromTracker(id){
     $('#trackerCatatan').value = '';
     $('#trackerSendMsg').textContent = '';
 
-    loadTrackerList(); // refresh daftar
+    loadTrackerList(false); // refresh daftar -- non-silent supaya box (yg sedang berisi pesan "Mengambil berkas...") pasti ditimpa ulang dgn daftar terbaru
   }catch(err){
     box.innerHTML = `<div class="ocr-progress">Gagal memuat: ${err.message}</div>`;
   }
@@ -727,10 +768,9 @@ async function sendToTracker(){
   msg.style.color = 'var(--brick)';
 
   if(!admin){ msg.textContent = 'Pilih admin verifikator dulu.'; return; }
-  if(status === 'Terverifikasi' && !App.pages.some(p=>p.isNC)){
-    msg.textContent = 'Tidak ada halaman berstempel untuk dikirim.';
-    return;
-  }
+  // Tidak ada lagi keharusan minimal 1 halaman berstempel -- verifikator bisa
+  // kirim "Terverifikasi" walau tanpa stempel sama sekali (mis. dokumennya
+  // memang tidak perlu potongan pajak), asalkan sudah dijelaskan di Catatan.
 
   const btn = $('#btnSendToTracker');
   btn.disabled = true;
@@ -756,6 +796,12 @@ async function sendToTracker(){
     });
     const result = await res.json();
     if(!result.success) throw new Error(result.error || 'Gagal mengirim ke Doc Tracker Tax');
+
+    // Langsung hilangkan dari daftar sidebar tanpa menunggu polling/refresh
+    // berikutnya -- lebih terasa instan buat verifikator.
+    trackerRows = trackerRows.filter(r => r['ID'] !== App.trackerMeta.id);
+    trackerListSnapshot = JSON.stringify(trackerRows.map(r => r['ID']));
+    renderTrackerList();
 
     msg.style.color = 'var(--ok)';
     msg.textContent = `✓ Berhasil dikirim ke Doc Tracker Tax. Status pengajuan sudah berubah jadi ${status}.`;
