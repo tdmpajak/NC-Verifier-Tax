@@ -61,6 +61,10 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--paper);color:var(--
 .sig-chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border-radius:20px;padding:3px 10px 3px 4px;}
 .sig-chip img{width:26px;height:18px;object-fit:contain;background:#fff;border-radius:3px;}
 .sig-chip span{font-size:10.5px;color:#D8D2C4;}
+.sig-switch{display:flex;gap:3px;background:rgba(255,255,255,.08);border-radius:20px;padding:3px;}
+.sig-switch button{border:none;background:transparent;color:#D8D2C4;font-size:10px;font-weight:600;padding:3px 9px;border-radius:16px;cursor:pointer;}
+.sig-switch button:hover{background:rgba(255,255,255,.12);}
+.sig-switch button.active{background:#fff;color:#1a1a1a;}
 
 .left{grid-area:left;background:var(--paper-deep);border-right:1px solid var(--line);overflow-y:auto;padding:14px 12px 40px;}
 .upload-zone{border:1.5px dashed #B7AE97;border-radius:var(--radius);padding:22px 12px;text-align:center;background:rgba(255,255,255,.4);cursor:pointer;transition:.15s;}
@@ -313,6 +317,17 @@ function b64ToBytes(b64){
 }
 const DEFAULT_SIG_BYTES = b64ToBytes(DEFAULT_SIG_B64);
 
+/* ══════════════════════════════════════════
+   TANDA TANGAN DEFAULT #2 (tertanam di file ini)
+   — pilihan tanda tangan bawaan ke-2. TTD #1 di atas
+   TETAP jadi default utama (otomatis dipakai saat file
+   dibuka); TTD #2 ini dipilih manual lewat chip di
+   sidebar kiri. Custom upload tetap tersedia seperti biasa.
+   ══════════════════════════════════════════ */
+const DEFAULT_SIG2_B64 = "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";
+const DEFAULT_SIG2_DATAURL = 'data:image/png;base64,' + DEFAULT_SIG2_B64;
+const DEFAULT_SIG2_BYTES = b64ToBytes(DEFAULT_SIG2_B64);
+
 
 /* ══════════════════════════════════════════
    SUMBER TARIF PAJAK — direplikasi dari G-Tax
@@ -516,7 +531,8 @@ function analyzeTaxSuggestion(p){
 let App = {
   fileBytes:null, fileName:'', pdfjsDoc:null, pages:[], activePage:null, ocrRunning:false,
   loadToken:0, // dinaikkan setiap upload file baru — dipakai utk membatalkan sesi OCR file lama (lihat runAllOcr)
-  signature:{dataUrl:DEFAULT_SIG_DATAURL, bytes:DEFAULT_SIG_BYTES, mime:'image/png', w:390, h:461, isDefault:true},
+  // signature.source: 'sig1' (default utama) | 'sig2' (default kedua) | 'custom' (hasil upload)
+  signature:{dataUrl:DEFAULT_SIG_DATAURL, bytes:DEFAULT_SIG_BYTES, mime:'image/png', w:390, h:461, source:'sig1'},
   trackerMeta:null, // { id, cabang, namaPic } -- terisi kalau dokumen dimuat dari Doc Tracker Tax, null kalau upload manual
 };
 
@@ -530,7 +546,10 @@ function parseIdNumber(str){
   return parseInt(cleaned.replace(/[.,]/g,''),10) || 0;
 }
 
-/* ══════════ SIGNATURE UPLOAD (diingat selama sesi ini) ══════════ */
+/* ══════════ SIGNATURE: 2 pilihan bawaan + upload kustom (diingat selama sesi ini) ══════════
+   TTD 1 tetap jadi default utama (otomatis dipakai begitu file dibuka). Verifikator bisa
+   pindah ke TTD 2 kapan saja lewat chip "TTD 2" di topbar, atau upload TTD sendiri lewat
+   tombol "Upload Tanda Tangan" -- ketiganya bisa dipakai bergantian dalam satu sesi. */
 $('#btnUploadSig').addEventListener('click', ()=> $('#sigInput').click());
 $('#sigInput').addEventListener('change', async e=>{
   const file = e.target.files[0];
@@ -542,7 +561,7 @@ $('#sigInput').addEventListener('change', async e=>{
   const dims = await new Promise(res=>{
     const img = new Image(); img.onload = ()=>res({w:img.width,h:img.height}); img.src = dataUrl;
   });
-  App.signature = { dataUrl, bytes, mime:file.type, w:dims.w, h:dims.h, isDefault:false };
+  App.signature = { dataUrl, bytes, mime:file.type, w:dims.w, h:dims.h, source:'custom' };
   App.pages.forEach(pg=>{ if(pg.isNC) pg.stampSign.enabled = true; });
   renderSigChip();
   renderPageList();
@@ -551,8 +570,12 @@ $('#sigInput').addEventListener('change', async e=>{
     renderOverlays(p); renderRightPanel();
   }
 });
-function resetToDefaultSignature(){
-  App.signature = { dataUrl:DEFAULT_SIG_DATAURL, bytes:DEFAULT_SIG_BYTES, mime:'image/png', w:390, h:461, isDefault:true };
+// Pindah ke salah satu tanda tangan bawaan (id: 'sig1' atau 'sig2'). Dipanggil dari chip
+// pemilih di topbar, dan juga dipakai untuk "↺ Default" (selalu kembali ke sig1).
+function selectBuiltInSignature(id){
+  App.signature = (id === 'sig2')
+    ? { dataUrl:DEFAULT_SIG2_DATAURL, bytes:DEFAULT_SIG2_BYTES, mime:'image/png', w:236, h:254, source:'sig2' }
+    : { dataUrl:DEFAULT_SIG_DATAURL,  bytes:DEFAULT_SIG_BYTES,  mime:'image/png', w:390, h:461, source:'sig1' };
   renderSigChip();
   renderPageList();
   if(App.activePage!=null){
@@ -560,12 +583,18 @@ function resetToDefaultSignature(){
     renderOverlays(p); renderRightPanel();
   }
 }
+function resetToDefaultSignature(){ selectBuiltInSignature('sig1'); }
 function renderSigChip(){
   const wrap = $('#sigChipWrap');
   if(!App.signature.dataUrl){ wrap.innerHTML=''; return; }
-  const label = App.signature.isDefault ? 'TTD default siap dipakai' : 'TTD siap dipakai';
-  const resetBtn = App.signature.isDefault ? '' : `<button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:10px;color:#D8D2C4;" onclick="resetToDefaultSignature()" title="Kembali ke tanda tangan default">↺ Default</button>`;
-  wrap.innerHTML = `<div class="sig-chip"><img src="${App.signature.dataUrl}"><span>${label}</span></div>${resetBtn}`;
+  const src = App.signature.source;
+  const label = src === 'custom' ? 'TTD kustom aktif' : (src === 'sig2' ? 'TTD 2 siap dipakai' : 'TTD 1 (default) siap dipakai');
+  wrap.innerHTML = `
+    <div class="sig-chip"><img src="${App.signature.dataUrl}"><span>${label}</span></div>
+    <div class="sig-switch">
+      <button type="button" class="${src==='sig1'?'active':''}" onclick="selectBuiltInSignature('sig1')" title="Pakai tanda tangan bawaan #1 (default)">TTD 1</button>
+      <button type="button" class="${src==='sig2'?'active':''}" onclick="selectBuiltInSignature('sig2')" title="Pakai tanda tangan bawaan #2">TTD 2</button>
+    </div>`;
 }
 
 renderSigChip(); // tampilkan chip TTD default sejak halaman pertama kali dibuka
@@ -1422,7 +1451,7 @@ function renderRightPanel(){
       <h4>Tanda Tangan &amp; Tanggal Verifikasi <label class="switch"><input type="checkbox" ${p.stampSign.enabled?'checked':''} onchange="toggleStamp(${p.num},'stampSign',this.checked)"><span class="slider"></span></label></h4>
       <div class="desc">Tanggal ini selalu tampil berdampingan dengan tanda tangan — berlaku juga untuk NC yang tidak dipotong pajak.</div>
       ${App.signature.dataUrl
-        ? `<div class="sig-preview-box"><img src="${App.signature.dataUrl}"><span class="txt">${App.signature.isDefault ? 'Memakai tanda tangan default.' : 'Tanda tangan kustom aktif.'} Ganti lewat tombol "Upload Tanda Tangan" di kanan atas${App.signature.isDefault ? '' : ', atau tombol "↺ Default" untuk kembali ke bawaan'}.</span></div>`
+        ? `<div class="sig-preview-box"><img src="${App.signature.dataUrl}"><span class="txt">${App.signature.source==='sig1' ? 'Memakai tanda tangan bawaan #1 (default).' : App.signature.source==='sig2' ? 'Memakai tanda tangan bawaan #2.' : 'Tanda tangan kustom aktif.'} Ganti lewat chip "TTD 1"/"TTD 2" atau tombol "Upload Tanda Tangan" di kanan atas.</span></div>`
         : `<div class="note-mini warn">Belum ada tanda tangan diupload. Klik "Upload Tanda Tangan" di kanan atas dulu.</div>`}
       <div class="field" style="margin-top:8px;"><label>Posisi Tanda Tangan</label>
         <select onchange="updateStampSignPos(${p.num},this.value)">
