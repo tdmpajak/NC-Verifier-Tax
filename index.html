@@ -1500,7 +1500,11 @@ function makeResizable(handleEl, groupEl, p){
     const dy = (e.clientY-startY)/f;
     const delta = (dx+dy)/2;
     let newScale = startScale + delta/160;
-    newScale = Math.max(0.6, Math.min(2.5, newScale));
+    // Sebelumnya dibatasi 60%-250% -- sekarang dilebarkan jauh (10%-1000%),
+    // praktis tanpa batasan untuk kebutuhan normal. Batas bawah/atas kecil
+    // ini cuma dijaga supaya stempel tidak sampai hilang (scale 0) atau
+    // kebalik (scale negatif) kalau kursornya tidak sengaja kebablasan.
+    newScale = Math.max(0.1, Math.min(10, newScale));
     p.stampScale = newScale;
     groupEl.style.transform = `scale(${newScale})`;
   });
@@ -1549,7 +1553,7 @@ function renderRightPanel(){
       <h4>Ukuran Stempel</h4>
       <div class="desc">Atau tarik langsung sudut kanan-bawah kotak stempel di preview.</div>
       <div class="field">
-        <input type="range" min="60" max="250" step="5" value="${Math.round((p.stampScale||1)*100)}" oninput="updateStampScale(${p.num},this.value)" style="width:100%;">
+        <input type="range" min="10" max="1000" step="5" value="${Math.round((p.stampScale||1)*100)}" oninput="updateStampScale(${p.num},this.value)" style="width:100%;">
       </div>
       <div class="calc-row"><span class="l">Skala saat ini</span><span id="stampScaleLbl">${Math.round((p.stampScale||1)*100)}%</span></div>
     </div>
