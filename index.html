@@ -753,7 +753,8 @@ function applyTrackerFilter(){
 // silent=true dipakai untuk auto-refresh berkala: tidak menampilkan ulang
 // "Memuat daftar..." dan dilewati sama sekali kalau datanya tidak berubah,
 // supaya daftar di sidebar tidak berkedip/reset posisi klik tiap beberapa detik.
-async function loadTrackerList(silent){
+// isRetry=true dipakai internal saat mencoba ulang otomatis (lihat catch di bawah).
+async function loadTrackerList(silent, isRetry){
   if(trackerListFetching) return;
   trackerListFetching = true;
   const box = $('#trackerList');
@@ -782,6 +783,14 @@ async function loadTrackerList(silent){
     trackerRawData = result.data;
     applyTrackerFilter();
   }catch(err){
+    // Kegagalan pertama pada load non-silent sering cuma gangguan SESAAT (mis.
+    // kena batas kuota Apps Script sebentar kalau banyak tab dibuka
+    // bersamaan) -- coba lagi otomatis sekali sebelum menampilkan error.
+    if(!silent && !isRetry){
+      trackerListFetching = false;
+      setTimeout(()=>loadTrackerList(false, true), 1500);
+      return;
+    }
     if(!silent) box.innerHTML = `<div class="ocr-progress">Gagal memuat: ${err.message}</div>`;
     // Kalau silent (auto-refresh) dan gagal, biarkan daftar lama tetap tampil.
   }finally{
@@ -819,12 +828,13 @@ function renderTrackerList(){
 // Muat daftar begitu halaman dibuka -- tidak perlu klik "↻ Muat" dulu.
 loadTrackerList(false);
 
-// Auto-refresh berkala tiap 4 detik, dilewati kalau tab sedang tidak aktif
-// (hemat kuota) atau request sebelumnya masih berjalan.
+// PENTING: interval ini sengaja diperlambat dari 4 detik jadi 12 detik --
+// alasan sama seperti di tracking.js (lihat komentar di sana): mengurangi
+// beban ke kuota Apps Script kalau ada beberapa tab dibuka bersamaan.
 setInterval(() => {
   if(document.hidden) return;
   loadTrackerList(true);
-}, 4000);
+}, 12000);
 document.addEventListener('visibilitychange', () => {
   if(!document.hidden) loadTrackerList(true);
 });
