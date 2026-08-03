@@ -422,6 +422,22 @@ function todayStr(){
   const p = n=>String(n).padStart(2,'0');
   return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
 }
+// Sama seperti todayStr(), tapi ikut menyertakan JAM:MENIT verifikasi --
+// dipakai di stempel supaya bukan cuma tanggal, tapi juga waktu persisnya.
+function todayDateTimeStr(){
+  const d = new Date();
+  const p = n=>String(n).padStart(2,'0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Nama penandatangan yang tampil di stempel, mengikuti TTD mana yang sedang
+// aktif dipakai (TTD 1 = Widi, TTD 2 = Gita) -- kalau yang dipakai adalah
+// tanda tangan kustom hasil upload, tampilkan label generik karena nama
+// pastinya tidak diketahui sistem.
+function signerLabel(){
+  if(App.signature.source === 'sig1') return 'Widi';
+  if(App.signature.source === 'sig2') return 'Gita';
+  return 'Tax Verifikator';
+}
 
 // Terapkan jenis pajak hasil saran analisis otomatis secara default, selama
 // user belum memilih sendiri jenis transaksi/tarifnya secara manual.
@@ -684,7 +700,7 @@ async function handleFile(file){
       ocrText:'', ocrDone:false, isNC:false,
       ncFields:{no:'', supplier:'', keterangan:'', jumlah:''},
       pkpAuto:null,
-      verifDate: todayStr(),
+      verifDate: todayDateTimeStr(),
       stampGroupPos:{x:14, y: Math.max(14, canvas.height - 210)},
       stampPosManual:false,
       stampScale:1,
@@ -1442,7 +1458,7 @@ function renderOverlays(p){
   let sigHtml = '';
   if(showSign){
     const {w:sw, h:sh} = getSigDims(p.stampSign.imgScale);
-    sigHtml = `<div class="sig-block sig-${sigPos}"><img src="${App.signature.dataUrl}" style="width:${sw}px;height:${sh}px;"><span class="lbl">Tax Verifikator</span><span class="dt">${escapeHtml(p.verifDate)}</span></div>`;
+    sigHtml = `<div class="sig-block sig-${sigPos}"><img src="${App.signature.dataUrl}" style="width:${sw}px;height:${sh}px;"><span class="lbl">${escapeHtml(signerLabel())}</span><span class="dt">${escapeHtml(p.verifDate)}</span></div>`;
   }
 
   // Tanda tangan diletakkan berdampingan (kiri/kanan) dengan stempel potongan pajak, bukan ditumpuk di bawahnya
@@ -1640,8 +1656,8 @@ function renderRightPanel(){
         <input type="range" min="50" max="200" step="5" value="${Math.round((p.stampSign.imgScale||1)*100)}" oninput="updateSigImgScale(${p.num},this.value)" style="width:100%;">
         <div class="calc-row"><span class="l">Skala gambar TTD</span><span id="sigScaleLbl">${Math.round((p.stampSign.imgScale||1)*100)}%</span></div>
       </div>
-      <div class="field" style="margin-top:8px;"><label>Tanggal Verifikasi</label>
-        <input type="text" value="${escapeHtml(p.verifDate)}" oninput="updateVerifDate(${p.num},this.value)" placeholder="dd/mm/yyyy"></div>
+      <div class="field" style="margin-top:8px;"><label>Tanggal &amp; Waktu Verifikasi</label>
+        <input type="text" value="${escapeHtml(p.verifDate)}" oninput="updateVerifDate(${p.num},this.value)" placeholder="dd/mm/yyyy HH:MM"></div>
     </div>
 
     <div class="panel-block">
@@ -2174,7 +2190,7 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
     let cursorY = yTop - 12/S;
     page.drawImage(sigImage, {x:imgX, y:cursorY-imgH, width:imgW, height:imgH});
     cursorY -= imgH + 14/S;
-    page.drawText('Tax Verifikator', {x:sigX+pad, y:cursorY, size, font:fontBold, color:red});
+    page.drawText(safeText(signerLabel()), {x:sigX+pad, y:cursorY, size, font:fontBold, color:red});
     cursorY -= 13/S;
     page.drawText(safeText(p.verifDate), {x:sigX+pad, y:cursorY, size, font:fontBold, color:red});
   }
