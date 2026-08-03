@@ -1995,10 +1995,54 @@ async function generateFinalPDF(){
 }
 
 function safeText(s){
+  if (!s) return '';
+  // BUG YANG DIPERBAIKI: font yang dipakai di stempel PDF cuma mendukung
+  // karakter dasar (mirip Latin-1/WinAnsi) -- sebelumnya karakter "pintar"
+  // yang sering muncul otomatis dari keyboard HP atau copy-paste dari Word/
+  // Google Docs (tanda kutip melengkung, tanda pisah panjang, titik tiga,
+  // dsb) langsung diganti jadi "?" polos, bikin teks kelihatan berantakan
+  // (mis. "SUKARNA'" jadi "SUKARNA?"). Sekarang dikonversi dulu ke versi
+  // biasa yang didukung font, supaya tetap terbaca normal.
+  const normalized = s
+    .replace(/[\u2018\u2019\u02BC\u02BB]/g, "'")   // kutip satu melengkung -> '
+    .replace(/[\u201C\u201D]/g, '"')                 // kutip dua melengkung -> "
+    .replace(/[\u2013\u2014]/g, '-')                 // en/em dash -> -
+    .replace(/\u2026/g, '...')                       // elipsis -> ...
+    .replace(/[\u2022\u25CF\u25AA]/g, '-')           // bullet -> -
+    .replace(/[\u00A0\u2007\u202F]/g, ' ');          // spasi non-standar -> spasi biasa
   // \n (enter) sengaja DIPERTAHANKAN di sini (dulu ikut kena replace jadi
   // "?" karena di luar rentang \x20-\x7E) -- supaya baris baru yang diketik
   // user di kolom Note beneran jadi baris baru saat digambar ke stempel.
-  return (s||'').replace(/[^\x20-\x7E\u00A0-\u00FF\n]/g, '?');
+  return normalized.replace(/[^\x20-\x7E\u00A0-\u00FF\n]/g, '?');
+}
+
+// BUG YANG DIPERBAIKI: lebar kotak stempel itu BERUBAH-UBAH tergantung ada
+// tidaknya stempel pajak diaktifkan (mis. cuma ~100px kalau cuma tanda
+// tangan+note saja, tanpa stempel pajak) -- tapi Note sebelumnya SELALU
+// dipaksa membungkus di 34 karakter tetap, tidak peduli lebar kotak
+// sebenarnya. Kalau kotaknya sempit, teks jadi meluber keluar garis kotak
+// ("offside"). Fungsi ini mengukur lebar teks SESUNGGUHNYA pakai metrik
+// font asli (bukan cuma menghitung jumlah karakter), supaya baris teks
+// selalu pas di dalam kotak berapa pun lebarnya.
+function wrapTextByWidth(text, font, size, maxWidthPt){
+  const paragraphs = text.split('\n');
+  const lines = [];
+  paragraphs.forEach(para=>{
+    if(para.trim()===''){ lines.push(''); return; } // baris kosong (Enter dobel) tetap dipertahankan
+    const words = para.split(/\s+/).filter(Boolean);
+    let cur = '';
+    words.forEach(w=>{
+      const candidate = cur ? cur+' '+w : w;
+      if(cur && font.widthOfTextAtSize(candidate, size) > maxWidthPt){
+        lines.push(cur);
+        cur = w;
+      } else {
+        cur = candidate;
+      }
+    });
+    if(cur) lines.push(cur);
+  });
+  return lines;
 }
 
 function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, showSign){
@@ -2032,10 +2076,11 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   if(p.stampTax.enabled) taxHeightPx = 11 + (73 + dedRowsCount*17) + 11;
   const sigHeightPx = showSign ? 12+46*(p.stampSign.imgScale||1)+14+10+13+9 : 0;
   const bodyHeightPx = Math.max(taxHeightPx, sigHeightPx);
-  const noteLineCount = showNote ? Math.min(6, wrapText(safeText(p.stampNote.text.trim()), 34).length) : 0;
+  const totalWPx = taxBoxWPx + sigBoxWPx; // dipindah ke sini (sebelumnya di bawah) supaya bisa dipakai utk hitung lebar Note yang sebenarnya
+  const noteMaxWidthPt = Math.max(40, totalWPx - 18) / S; // -18 = padding kiri+kanan (9px tiap sisi)
+  const noteLineCount = showNote ? Math.min(6, wrapTextByWidth(safeText(p.stampNote.text.trim()), fontBold, fs(SIZE), noteMaxWidthPt).length) : 0;
   const noteHeightPx = showNote ? (26 + noteLineCount*10 + 9) : 0;
 
-  const totalWPx = taxBoxWPx + sigBoxWPx;
   const totalHeightPx = bodyHeightPx + noteHeightPx;
 
   const { height:pageHeight } = page.getSize();
@@ -2140,7 +2185,7 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
     page.drawText('NOTE:', {x:x+pad, y:cursorY, size, font:fontBold, color:red});
     cursorY -= 12/S;
     const words = safeText(p.stampNote.text.trim());
-    const lines = wrapText(words, 34);
+    const lines = wrapTextByWidth(words, fontBold, size, noteMaxWidthPt);
     lines.slice(0,6).forEach(line=>{
       page.drawText(line, {x:x+pad, y:cursorY, size, font:fontBold, color:red});
       cursorY -= 10/S;
