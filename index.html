@@ -749,17 +749,28 @@ function escapeHtmlNCV(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+// BUG YANG DIPERBAIKI: sebelumnya status dibandingkan pakai "===" yang harus
+// SAMA PERSIS (besar/kecil huruf & spasi). Kalau status diubah manual di
+// Google Sheets (mis. ada spasi nyelip, atau ejaan "menunggu verifikasi"
+// huruf kecil semua), baris itu tidak match SATU PUN kategori -- jadi hilang
+// dari tab "Menunggu Verifikasi" MAUPUN tab "Sudah Diproses". Sekarang
+// dibandingkan setelah di-trim & disamakan huruf besar/kecil dulu, supaya
+// tetap terdeteksi walau ejaan di Sheets sedikit berbeda.
+function normStatus(v){
+  return String(v||'').trim().toLowerCase();
+}
+
 // Menyaring trackerRawData sesuai tab yang aktif -- dipanggil tiap ganti tab
 // ATAU tiap kali data baru selesai dimuat dari server.
 function applyTrackerFilter(){
   if(trackerMode === 'pending'){
-    trackerRows = trackerRawData.filter(r => r['Status']==='Menunggu Verifikasi' && r['File Berkas']);
+    trackerRows = trackerRawData.filter(r => normStatus(r['Status'])==='menunggu verifikasi' && r['File Berkas']);
   } else {
     // Tab "Sudah Diproses" -- untuk KOREKSI pengajuan yang salah pilih
     // Terverifikasi/Ditolak. Diurutkan dari yang paling baru diproses,
     // dibatasi 50 teratas supaya daftar tidak kepanjangan.
     trackerRows = trackerRawData
-      .filter(r => (r['Status']==='Terverifikasi' || r['Status']==='Ditolak') && r['File Berkas'])
+      .filter(r => (normStatus(r['Status'])==='terverifikasi' || normStatus(r['Status'])==='ditolak') && r['File Berkas'])
       .sort((a,b)=> new Date(b['Tanggal Verifikasi']||0) - new Date(a['Tanggal Verifikasi']||0))
       .slice(0,50);
   }
@@ -823,8 +834,8 @@ function renderTrackerList(){
     return;
   }
   box.innerHTML = trackerRows.map(r => {
-    const badge = r['Status']==='Terverifikasi' ? '<span class="tracker-status-badge verified">Terverifikasi</span>'
-      : r['Status']==='Ditolak' ? '<span class="tracker-status-badge rejected">Ditolak</span>' : '';
+    const badge = normStatus(r['Status'])==='terverifikasi' ? '<span class="tracker-status-badge verified">Terverifikasi</span>'
+      : normStatus(r['Status'])==='ditolak' ? '<span class="tracker-status-badge rejected">Ditolak</span>' : '';
     return `
     <div class="page-card" data-id="${escapeHtmlNCV(r['ID'])}" style="cursor:pointer;">
       <div class="meta">
@@ -881,7 +892,7 @@ async function loadFromTracker(id){
     // berarti verifikator sedang MENGOREKSI keputusan lama -- isi ulang
     // Keputusan/Catatan/Admin dengan data sebelumnya supaya kelihatan apa
     // yang mau diubah, dan tampilkan catatan peringatan koreksi.
-    const isCorrection = result.status && result.status !== 'Menunggu Verifikasi';
+    const isCorrection = result.status && normStatus(result.status) !== 'menunggu verifikasi';
     $('#trackerStatusSelect').value = isCorrection ? result.status : 'Terverifikasi';
     $('#trackerCatatan').value = isCorrection ? (result.catatanAdmin || '') : '';
     // Default centang: Terverifikasi = ya (biar hasil stempelnya kelihatan),
@@ -2092,7 +2103,15 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   if(p.stampTax.enabled) taxHeightPx = 11 + (73 + dedRowsCount*17) + 11;
   const sigHeightPx = showSign ? 12+46*(p.stampSign.imgScale||1)+14+10+13+9 : 0;
   const bodyHeightPx = Math.max(taxHeightPx, sigHeightPx);
-  const totalWPx = taxBoxWPx + sigBoxWPx; // dipindah ke sini (sebelumnya di bawah) supaya bisa dipakai utk hitung lebar Note yang sebenarnya
+  // BUG YANG DIPERBAIKI: lebar kotak stempel di PDF dihitung MURNI dari
+  // Stempel Pajak (225px) + Tanda Tangan (100px) SAJA -- kalau dua-duanya
+  // nonaktif dan cuma Note yang diisi, lebarnya jadi 0px. Padahal tampilan
+  // di browser (.stamp-group) punya min-width:175px, jadi kelihatan rapi
+  // sebelum di-download. Waktu di-generate ke PDF, kotaknya jadi jauh lebih
+  // sempit dari yang terlihat di preview -> teks Note "meluber"/offside ke
+  // luar garis kotak. Sekarang lebar kotak PDF diberi batas minimum 175px
+  // yang sama supaya SELALU sama dengan tampilan preview di browser.
+  const totalWPx = Math.max(175, taxBoxWPx + sigBoxWPx); // dipindah ke sini (sebelumnya di bawah) supaya bisa dipakai utk hitung lebar Note yang sebenarnya
   const noteMaxWidthPt = Math.max(40, totalWPx - 18) / S; // -18 = padding kiri+kanan (9px tiap sisi)
   const noteLineCount = showNote ? Math.min(6, wrapTextByWidth(safeText(p.stampNote.text.trim()), fontBold, fs(SIZE), noteMaxWidthPt).length) : 0;
   const noteHeightPx = showNote ? (26 + noteLineCount*10 + 9) : 0;
