@@ -760,11 +760,22 @@ function normStatus(v){
   return String(v||'').trim().toLowerCase();
 }
 
+// PENYEBAB LAIN yang ditemukan: kalau kolom Status di Google Sheets DIKOSONGKAN
+// manual (mis. supaya bisa diverifikasi ulang dari awal), nilainya jadi string
+// kosong -- tidak match 'menunggu verifikasi' ATAUPUN 'terverifikasi'/'ditolak',
+// jadi baris itu hilang dari SEMUA tab. Sekarang status kosong dianggap SAMA
+// dengan "Menunggu Verifikasi" (sesuai default saat baris pertama kali dibuat),
+// supaya mengosongkan sel Status jadi cara yang aman untuk "reset ke pending".
+function isPendingStatus(v){
+  const s = normStatus(v);
+  return s === '' || s === 'menunggu verifikasi';
+}
+
 // Menyaring trackerRawData sesuai tab yang aktif -- dipanggil tiap ganti tab
 // ATAU tiap kali data baru selesai dimuat dari server.
 function applyTrackerFilter(){
   if(trackerMode === 'pending'){
-    trackerRows = trackerRawData.filter(r => normStatus(r['Status'])==='menunggu verifikasi' && r['File Berkas']);
+    trackerRows = trackerRawData.filter(r => isPendingStatus(r['Status']) && r['File Berkas']);
   } else {
     // Tab "Sudah Diproses" -- untuk KOREKSI pengajuan yang salah pilih
     // Terverifikasi/Ditolak. Diurutkan dari yang paling baru diproses,
@@ -794,7 +805,9 @@ async function loadTrackerList(silent, isRetry){
   if(!silent) box.innerHTML = '<div class="ocr-progress">Memuat daftar…</div>';
 
   try{
-    const res = await fetch(`${TRACKER_API_URL}?action=list`);
+    // Pakai jalur ringan "listVerifier" (lihat Code.gs) -- server sudah menyaring
+    // hanya baris yang relevan buat NC Verifier, bukan seluruh 1000+ baris sheet.
+    const res = await fetch(`${TRACKER_API_URL}?action=listVerifier`);
     const result = await res.json();
     if(!result.success) throw new Error(result.error || 'Gagal memuat daftar');
 
@@ -892,7 +905,7 @@ async function loadFromTracker(id){
     // berarti verifikator sedang MENGOREKSI keputusan lama -- isi ulang
     // Keputusan/Catatan/Admin dengan data sebelumnya supaya kelihatan apa
     // yang mau diubah, dan tampilkan catatan peringatan koreksi.
-    const isCorrection = result.status && normStatus(result.status) !== 'menunggu verifikasi';
+    const isCorrection = result.status && !isPendingStatus(result.status);
     $('#trackerStatusSelect').value = isCorrection ? result.status : 'Terverifikasi';
     $('#trackerCatatan').value = isCorrection ? (result.catatanAdmin || '') : '';
     // Default centang: Terverifikasi = ya (biar hasil stempelnya kelihatan),
