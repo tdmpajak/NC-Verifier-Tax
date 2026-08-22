@@ -807,7 +807,11 @@ async function loadTrackerList(silent, isRetry){
   try{
     // Pakai jalur ringan "listVerifier" (lihat Code.gs) -- server sudah menyaring
     // hanya baris yang relevan buat NC Verifier, bukan seluruh 1000+ baris sheet.
-    const res = await fetch(`${TRACKER_API_URL}?action=listVerifier`);
+    // cache:'no-store' + parameter waktu (_=Date.now()) memastikan browser TIDAK
+    // PERNAH pakai jawaban lama yang tersimpan/di-cache -- selalu tanya server yang
+    // sebenarnya. Ini memperbaiki kejadian aneh: link yang sama sukses saat dites
+    // manual di address bar, tapi gagal terus saat dipanggil otomatis dari sini.
+    const res = await fetch(`${TRACKER_API_URL}?action=listVerifier&_=${Date.now()}`, { cache: 'no-store' });
     const result = await res.json();
     if(!result.success) throw new Error(result.error || 'Gagal memuat daftar');
 
@@ -2082,7 +2086,29 @@ function wrapTextByWidth(text, font, size, maxWidthPt){
     });
     if(cur) lines.push(cur);
   });
-  return lines;
+  // BUG YANG DIPERBAIKI: pembungkusan di atas cuma memecah di SPASI. Kalau ada
+  // satu kata/token tanpa spasi yang sendirian sudah lebih lebar dari kotak
+  // (mis. nomor/kode panjang yang diketik tanpa spasi), kata itu tetap lolos
+  // apa adanya dan digambar melebihi garis kotak. Sekarang tiap baris hasil
+  // wrap di atas dicek ulang: kalau MASIH lebih lebar dari kotak, dipotong
+  // paksa per-huruf supaya baris itu tidak pernah menggambar keluar border,
+  // apa pun isi catatannya.
+  const safeLines = [];
+  lines.forEach(line=>{
+    if(font.widthOfTextAtSize(line, size) <= maxWidthPt){ safeLines.push(line); return; }
+    let chunk = '';
+    for(const ch of line){
+      const candidate = chunk + ch;
+      if(chunk && font.widthOfTextAtSize(candidate, size) > maxWidthPt){
+        safeLines.push(chunk);
+        chunk = ch;
+      } else {
+        chunk = candidate;
+      }
+    }
+    if(chunk) safeLines.push(chunk);
+  });
+  return safeLines;
 }
 
 function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, showSign){
@@ -2120,11 +2146,28 @@ function drawStampGroup(page, p, fontBold, fontReg, rgb, sigImage, showNote, sho
   // Stempel Pajak (225px) + Tanda Tangan (100px) SAJA -- kalau dua-duanya
   // nonaktif dan cuma Note yang diisi, lebarnya jadi 0px. Padahal tampilan
   // di browser (.stamp-group) punya min-width:175px, jadi kelihatan rapi
-  // sebelum di-download. Waktu di-generate ke PDF, kotaknya jadi jauh lebih
-  // sempit dari yang terlihat di preview -> teks Note "meluber"/offside ke
-  // luar garis kotak. Sekarang lebar kotak PDF diberi batas minimum 175px
+  // sebelum di-download. Sekarang lebar kotak PDF diberi batas minimum 175px
   // yang sama supaya SELALU sama dengan tampilan preview di browser.
-  const totalWPx = Math.max(175, taxBoxWPx + sigBoxWPx); // dipindah ke sini (sebelumnya di bawah) supaya bisa dipakai utk hitung lebar Note yang sebenarnya
+  //
+  // BUG TAMBAHAN YANG DIPERBAIKI: di browser, kotak Note (.note-block) boleh
+  // melebar sendiri sampai max-width:320px kalau isi catatannya panjang --
+  // makanya di preview kelihatan lega. Tapi kotak PDF sebelumnya TETAP di
+  // 175px berapa pun panjang catatannya, jadi teks Note harus membungkus
+  // lebih rapat/banyak baris dibanding yang terlihat di preview. Sekarang
+  // lebar kotak PDF ikut melebar mengikuti baris Note terpanjang (dibatasi
+  // maksimal 320px, sama seperti browser), supaya jumlah baris & tampilannya
+  // konsisten dengan preview.
+  let noteWidenPx = 0;
+  if(showNote){
+    const noteParas = safeText(p.stampNote.text.trim()).split('\n');
+    let widestPt = 0;
+    noteParas.forEach(line=>{
+      widestPt = Math.max(widestPt, fontBold.widthOfTextAtSize(line, fs(SIZE)));
+    });
+    const widestPx = widestPt * S;
+    noteWidenPx = Math.min(320, widestPx + 18); // +18 = padding kiri+kanan (9px tiap sisi), dibatasi max sama seperti CSS max-width:320px
+  }
+  const totalWPx = Math.max(175, taxBoxWPx + sigBoxWPx, noteWidenPx);
   const noteMaxWidthPt = Math.max(40, totalWPx - 18) / S; // -18 = padding kiri+kanan (9px tiap sisi)
   const noteLineCount = showNote ? Math.min(6, wrapTextByWidth(safeText(p.stampNote.text.trim()), fontBold, fs(SIZE), noteMaxWidthPt).length) : 0;
   const noteHeightPx = showNote ? (26 + noteLineCount*10 + 9) : 0;
